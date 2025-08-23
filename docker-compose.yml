@@ -34,7 +34,7 @@ services:
 
   # MongoDB Exporter dla Prometheusa
   mongodb-exporter:
-    image: percona/mongodb_exporter:0.40.0
+    image: percona/mongodb_exporter:0.44.0
     container_name: mongodb-exporter
     restart: unless-stopped
     ports:

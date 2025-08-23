@@ -36,7 +36,7 @@ pg_stat_user_tables:
         usage: "LABEL"
         description: "Name of the schema"
     - relname:
-        usage: "LABEL" 
+        usage: "LABEL"
         description: "Name of the table"
     - seq_scan:
         usage: "COUNTER"

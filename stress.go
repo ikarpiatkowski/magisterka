@@ -1,30 +1,30 @@
 package main
 
 import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "io"
-    "log"
-    "strings"
-    "sync"
-    "sync/atomic"
-    "time"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
-    "github.com/jackc/pgx/v5/pgxpool"
-    "go.mongodb.org/mongo-driver/bson"
-    "go.mongodb.org/mongo-driver/mongo"
-    "go.mongodb.org/mongo-driver/mongo/options"
-    "github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // === Parametry konfiguracyjne ===
 const (
-    targetDuration = 2 * time.Minute    // Czas trwania testu
+    targetDuration = 10 * time.Minute    // Czas trwania testu
     numGoroutines  = 16                 // Liczba równoległych Goroutines na bazę
     batchSize      = 30                 // Rozmiar operacji pakietowych
     dbHost         = "localhost"
-    rampUpDuration = 30 * time.Second   // Czas na stopniowe zwiększanie obciążenia
+    rampUpDuration = 300 * time.Second   // Czas na stopniowe zwiększanie obciążenia
 )
 
 // Dostępne bazy: 'postgres', 'mongo', 'es'
