@@ -1,0 +1,20 @@
+---
+debug: true
+metricsPort: 8081
+pgx:
+  user: admin
+  password: password123
+  host: localhost
+  database: testdb
+  maxConnections: 20
+mongo:
+  user: admin
+  password: password123
+  host: localhost
+  database: store
+  maxConnections: 20
+test:
+  minClients: 10
+  maxClients: 10
+  stageIntervalS: 999999
+  requestDelayMs: 100
