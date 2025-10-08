@@ -20,16 +20,16 @@ import (
 
 // === Parametry konfiguracyjne ===
 const (
-    targetDuration = 10 * time.Minute    // Czas trwania testu
+    targetDuration = 2 * time.Minute    // Czas trwania testu
     numGoroutines  = 16                 // Liczba równoległych Goroutines na bazę
     batchSize      = 30                 // Rozmiar operacji pakietowych
     dbHost         = "localhost"
-    rampUpDuration = 300 * time.Second   // Czas na stopniowe zwiększanie obciążenia
+    rampUpDuration = 10 * time.Second   // Czas na stopniowe zwiększanie obciążenia
 )
 
 // Dostępne bazy: 'postgres', 'mongo', 'es'
 // Usuń z listy te, których nie chcesz testować.
-var databasesToTest = []string{"mongo"}
+var databasesToTest = []string{"postgres"}
 
 // === Struktury i funkcje pomocnicze ===
 

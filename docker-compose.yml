@@ -167,6 +167,16 @@ services:
     networks:
       - monitoring
 
+  # go-client
+  go-client:
+    build: ./227/client
+    container_name: go-client
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    networks:
+      - monitoring
+
 volumes:
   mongodb_data:
   postgresql_data:

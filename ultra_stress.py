@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pymongo
 import psycopg2
-from elasticsearch import Elasticsearch, NotFoundError
+# from elasticsearch import Elasticsearch, NotFoundError
 
 # Parametry konfiguracyjne
 TARGET_DURATION_MINUTES = 1  # Czas trwania testu w minutach
