@@ -57,12 +57,12 @@ func NewMetrics(reg prometheus.Registerer) *metrics {
 			Name:      "active_clients",
 			Help:      "Number of active clients.",
 		}),
-		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Namespace: "tester",
-			Name:      "request_duration_seconds",
-			Help:      "Duration of the request.",
-			Buckets:   buckets,
-		}, []string{"operation", "method"}),
+	       duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		       Namespace: "tester",
+		       Name:      "request_duration_seconds",
+		       Help:      "Duration of the request.",
+		       Buckets:   buckets,
+	       }, []string{"operation", "method", "db"}),
 	}
 	reg.MustRegister(m.duration, m.clients)
 

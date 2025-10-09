@@ -28,8 +28,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"insert\"}[5m])) by (le))",
-          "legendFormat": "insert"
+          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"insert\",db=\"mg\"}[5m])) by (le)",
+          "legendFormat": "mongo"
+        },
+        {
+          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"insert\",db=\"pg\"}[5m])) by (le)",
+          "legendFormat": "postgres"
         }
       ]
     },
@@ -52,8 +56,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"update\"}[5m])) by (le))",
-          "legendFormat": "update"
+          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"update\",db=\"mg\"}[5m])) by (le)",
+          "legendFormat": "mongo"
+        },
+        {
+          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"update\",db=\"pg\"}[5m])) by (le)",
+          "legendFormat": "postgres"
         }
       ]
     },
@@ -76,8 +84,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"select\"}[5m])) by (le))",
-          "legendFormat": "read"
+          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"select\",db=\"mg\"}[5m])) by (le)",
+          "legendFormat": "mongo"
+        },
+        {
+          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"select\",db=\"pg\"}[5m])) by (le)",
+          "legendFormat": "postgres"
         }
       ]
     },
@@ -100,8 +112,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"delete\"}[5m])) by (le))",
-          "legendFormat": "delete"
+          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"delete\",db=\"mg\"}[5m])) by (le)",
+          "legendFormat": "mongo"
+        },
+        {
+          "expr": "histogram_quantile(0.9, sum(rate(tester_request_duration_seconds_bucket{operation=\"delete\",db=\"pg\"}[5m])) by (le)",
+          "legendFormat": "postgres"
         }
       ]
     }
