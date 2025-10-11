@@ -36,6 +36,12 @@ scrape_configs:
     scrape_interval: 30s
     metrics_path: /metrics
 
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    scrape_interval: 15s
+    metrics_path: /metrics
+
   - job_name: "go-client"
     static_configs:
       - targets: ["172.17.0.1:8081", "172.17.0.1:8082"]

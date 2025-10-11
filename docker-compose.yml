@@ -1,5 +1,18 @@
 services:
-  # MongoDB
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - monitoring
+
   mongodb:
     image: mongo:latest
     container_name: mongodb
@@ -11,11 +24,9 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: password123
     volumes:
       - mongodb_data:/data/db
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks:
       - monitoring
 
-  # PostgreSQL
   postgresql:
     image: postgres:latest
     container_name: postgresql
@@ -28,11 +39,13 @@ services:
       POSTGRES_PASSWORD: password123
     volumes:
       - postgresql_data:/var/lib/postgresql/data
-      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql:ro
+    command:
+      - "postgres"
+      - "-c"
+      - "synchronous_commit=off"
     networks:
       - monitoring
 
-  # MongoDB Exporter dla Prometheusa
   mongodb-exporter:
     image: percona/mongodb_exporter:0.44.0
     container_name: mongodb-exporter
@@ -48,7 +61,6 @@ services:
     networks:
       - monitoring
 
-  # PostgreSQL Exporter dla Prometheusa
   postgresql-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: postgresql-exporter
@@ -58,11 +70,8 @@ services:
     environment:
       DATA_SOURCE_NAME: "postgresql://admin:password123@postgresql:5432/testdb?sslmode=disable"
     command:
-      - "--extend.query-path=/etc/postgres_exporter/queries.yaml"
       - "--log.level=info"
       - "--web.listen-address=:9187"
-    volumes:
-      - ./queries.yaml:/etc/postgres_exporter/queries.yaml:ro
     depends_on:
       - postgresql
     networks:
@@ -81,7 +90,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # Elasticsearch (single-node)
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
     container_name: elasticsearch
@@ -97,7 +105,6 @@ services:
     networks:
       - monitoring
 
-  # Elasticsearch Exporter dla Prometheusa
   elasticsearch-exporter:
     image: quay.io/prometheuscommunity/elasticsearch-exporter:latest
     container_name: elasticsearch-exporter
@@ -124,7 +131,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # Prometheus
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -148,7 +154,6 @@ services:
     networks:
       - monitoring
 
-  # Grafana
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -160,14 +165,11 @@ services:
       GF_USERS_ALLOW_SIGN_UP: false
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
     networks:
       - monitoring
 
-  # go-client
   go-client:
     build: ./227/client
     container_name: go-client
