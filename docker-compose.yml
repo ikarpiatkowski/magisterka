@@ -171,7 +171,7 @@ services:
       - monitoring
 
   go-client:
-    build: ./227/client
+    build: ./client
     container_name: go-client
     restart: unless-stopped
     ports:
