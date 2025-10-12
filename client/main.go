@@ -1,32 +1,45 @@
 package main
 
 import (
-	"flag"
 	"log/slog"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
-	db := flag.String("db", "", "database to test")
-	metricsPort := flag.Int("metrics-port", 0, "port for Prometheus metrics") // Domyślnie 0
-	flag.Parse()
-	validFlag(*db)
-
 	cfg := new(Config)
 	cfg.loadConfig("config.yaml")
-
-	if *metricsPort != 0 {
-		cfg.MetricsPort = *metricsPort // Nadpisz tylko, jeśli flaga została podana
-	}
 
 	if cfg.Debug {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 
-	reg := prometheus.NewRegistry()
-	m := NewMetrics(reg)
-	StartPrometheusServer(cfg, reg)
+	// Używamy WaitGroup, aby poczekać na zakończenie obu testów
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	runTest(cfg, *db, m)
+	// Uruchomienie testu dla PostgreSQL w osobnej gorutynie
+	go func() {
+		defer wg.Done()
+		// Każdy test potrzebuje własnego rejestru metryk
+		reg := prometheus.NewRegistry()
+		m := NewMetrics(reg, "pg") // Dodajemy etykietę "pg"
+		StartPrometheusServer(cfg.Postgres.MetricsPort, reg)
+		runTest(cfg, "pg", m)
+	}()
+
+	// Uruchomienie testu dla MongoDB w osobnej gorutynie
+	go func() {
+		defer wg.Done()
+		// Każdy test potrzebuje własnego rejestru metryk
+		reg := prometheus.NewRegistry()
+		m := NewMetrics(reg, "mg") // Dodajemy etykietę "mg"
+		StartPrometheusServer(cfg.Mongo.MetricsPort, reg)
+		runTest(cfg, "mg", m)
+	}()
+
+	// Czekaj na zakończenie obu gorutyn (testów)
+	wg.Wait()
+	slog.Info("All tests finished.")
 }

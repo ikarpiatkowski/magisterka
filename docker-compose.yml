@@ -176,9 +176,13 @@ services:
     restart: unless-stopped
     ports:
       - "8081:8081"
+      - "8082:8082"
     networks:
       - monitoring
-
+    depends_on:
+      - postgresql
+      - mongodb
+    command: ["tail", "-f", "/dev/null"] # <-- Upewnij się, że ta linia jest obecna
 volumes:
   mongodb_data:
   postgresql_data:

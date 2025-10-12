@@ -3,13 +3,11 @@ package main
 import (
 	"context"
 	"log/slog"
-	"sync"
-
 	"time"
 )
 
-func runTest(cfg *Config, db string, m *metrics) {
-	slog.Info("Starting a test", "db", db)
+func runTest(cfg *Config, dbType string, m *metrics) {
+	slog.Info("Starting a test", "db", dbType)
 
 	ctx, done := context.WithCancel(context.Background())
 	defer done()
@@ -17,71 +15,73 @@ func runTest(cfg *Config, db string, m *metrics) {
 	var pg *postgres
 	var mg *mongodb
 
-	if db == "pg" {
+	if dbType == "pg" {
 		pg = NewPostgres(ctx, cfg)
 	} else {
 		mg = NewMongo(ctx, cfg)
 	}
 
-	sleepInterval := cfg.Test.RequestDelayMs
-	currentClients := cfg.Test.MinClients
+	sleepInterval := time.Duration(cfg.Test.RequestDelayMs) * time.Millisecond
 
-	var wg sync.WaitGroup
-	for {
-		slog.Info("New", "clients", currentClients)
+	for currentClients := cfg.Test.MinClients; currentClients <= cfg.Test.MaxClients; currentClients++ {
+		slog.Info("Starting new stage", "db", dbType, "clients", currentClients)
 		m.clients.Set(float64(currentClients))
 
-		ticker := time.NewTicker(time.Duration(cfg.Test.StageIntervalS) * time.Second)
-		defer ticker.Stop()
-
+		stageCtx, cancelStage := context.WithCancel(ctx)
 		for i := 0; i < currentClients; i++ {
-			wg.Add(1)
 			go func() {
-				defer wg.Done()
-				// Create Product 10 products
-				var p product
-				for range 9 {
-					p = product{
-						Name:        genString(20),
-						Description: genString(100),
-						Price:       float32(random(1, 100)),
-						Stock:       100,
-						Colors:      []string{genString(5), genString(5)},
+				// Ta gorutyna będzie działać w pętli aż do końca etapu
+				for {
+					select {
+					case <-stageCtx.Done(): // Sprawdź, czy etap się zakończył
+						return
+					default:
+						// Kompletny i spójny cykl życia produktu w ramach jednej iteracji
+						p := product{
+							Name:        genString(20),
+							Description: genString(100),
+							Price:       float32(random(1, 100)),
+							Stock:       100,
+							Colors:      []string{genString(5), genString(5)},
+						}
+
+						// 1. Create - tworzymy produkt i upewniamy się, że mamy jego ID
+						if err := p.create(pg, mg, dbType, m); err != nil {
+							m.createErrorsTotal.Inc()
+							slog.Warn("create product failed", "error", err)
+							continue // Pomiń resztę cyklu, jeśli tworzenie się nie powiodło
+						}
+
+						// 2. Update - teraz mamy pewność, że ID istnieje
+						p.Stock = random(1, 100)
+						if err := p.update(pg, mg, dbType, m); err != nil {
+							m.updateErrorsTotal.Inc()
+							slog.Warn("update product failed", "error", err)
+						}
+
+						// 3. Search
+						if err := p.search(pg, mg, dbType, m, cfg.Debug); err != nil {
+							m.searchErrorsTotal.Inc()
+							slog.Warn("search product failed", "error", err)
+						}
+
+						// 4. Delete - usuwamy produkt, który stworzyliśmy
+						if err := p.delete(pg, mg, dbType, m); err != nil {
+							m.deleteErrorsTotal.Inc()
+							slog.Warn("delete product failed", "error", err)
+						}
+
+						if sleepInterval > 0 {
+							time.Sleep(sleepInterval)
+						}
 					}
-					warn(p.create(pg, mg, db, m), "create product failed")
-				}
-
-				p2 := product{
-					Name:        genString(20),
-					Description: genString(100),
-					Price:       float32(random(1, 100)),
-					Stock:       100,
-					Colors:      []string{genString(5), genString(5)},
-				}
-				warn(p2.create(pg, mg, db, m), "create product failed")
-
-				// Update stock quantity of the product
-				p2.Stock = random(1, 100)
-				warn(p2.update(pg, mg, db, m), "update product failed")
-
-				// Search for products with low price
-				warn(p.search(pg, mg, db, m, cfg.Debug), "search product failed")
-
-				// Delete product
-				warn(p.delete(pg, mg, db, m), "delete product failed")
-
-				if sleepInterval > 0 {
-					sleep(sleepInterval)
 				}
 			}()
 		}
 
-		<-ticker.C
-		wg.Wait()
-
-		if currentClients >= cfg.Test.MaxClients {
-			break
-		}
-		currentClients++
+		// Poczekaj na zakończenie etapu
+		time.Sleep(time.Duration(cfg.Test.StageIntervalS) * time.Second)
+		cancelStage() // Zakończ wszystkie gorutyny dla tego etapu
 	}
+	slog.Info("Test finished", "db", dbType)
 }

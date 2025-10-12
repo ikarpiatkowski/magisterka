@@ -1,18 +1,32 @@
-FROM golang:1.23.3-bookworm AS build
+# Etap 1: Budowanie aplikacji
+# Zmieniamy wersję Go na nowszą, zgodną z go.mod
+FROM golang:1.23 as builder
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+# Kopiujemy pliki go.mod i go.sum i pobieramy zależności
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN go mod download && go mod verify
-
+# Kopiujemy resztę kodu źródłowego
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o client -a -ldflags="-s -w" -installsuffix cgo
+# Budujemy aplikację
+RUN CGO_ENABLED=0 GOOS=linux go build -o /client .
 
-FROM scratch
 
-COPY --from=build /app/client /client
+# Etap 2: Finalny, lekki obraz
+FROM alpine:latest
 
-ENTRYPOINT ["/client"]
+WORKDIR /app
+
+# Kopiujemy skompilowaną aplikację z etapu budowania
+COPY --from=builder /client .
+
+# Kopiujemy plik konfiguracyjny
+COPY config.yaml .
+
+EXPOSE 8081 8082
+
+# Domyślna komenda, która uruchomi się, jeśli nie zostanie nadpisana w docker-compose
+CMD ["/app/client"]

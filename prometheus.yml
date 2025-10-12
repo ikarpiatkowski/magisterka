@@ -44,6 +44,6 @@ scrape_configs:
 
   - job_name: "go-client"
     static_configs:
-      - targets: ["172.17.0.1:8081", "172.17.0.1:8082"]
+      - targets: ["go-client:8081", "go-client:8082"] # <-- Zaktualizowano cele
     scrape_interval: 15s
     metrics_path: /metrics

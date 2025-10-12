@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type product struct {
-	PostgresId  int      `bson:"postgresId,omitempty" json:"postgresId,omitempty"`
-	MongoId     string   `bson:"mongoId,omitempty" json:"mongoId,omitempty"`
+	PostgresId  int      `bson:"-" json:"-"` // Ignorujemy w MongoDB i JSON
+	MongoId     string   `bson:"-" json:"-"` // Ignorujemy w MongoDB i JSON
+	Id          any      `bson:"_id,omitempty" json:"id,omitempty"`
 	Name        string   `bson:"name,omitempty" json:"name,omitempty"`
 	Description string   `bson:"description,omitempty" json:"description,omitempty"`
 	Price       float32  `bson:"price,omitempty" json:"price,omitempty"`
@@ -25,141 +25,115 @@ type product struct {
 func (p *product) create(pg *postgres, mg *mongodb, db string, m *metrics) (err error) {
 	now := time.Now()
 	defer func() {
-		if err == nil {
-			// usunięto logowanie i metryki z defer
+		// Niezależnie od błędu, obserwujemy czas trwania
+		if db == "pg" {
+			m.createLatency.Observe(time.Since(now).Seconds())
+		} else {
+			m.createLatency.Observe(time.Since(now).Seconds())
 		}
 	}()
 
 	if db == "pg" {
 		b, err := json.Marshal(p)
-		fail(err, "json.Marshal(p) failed")
-
+		if err != nil {
+			return fmt.Errorf("json.Marshal(p) failed: %w", err)
+		}
 		err = pg.dbpool.QueryRow(pg.context, `INSERT INTO product(jdoc) VALUES ($1) RETURNING id`, b).Scan(&p.PostgresId)
-
-		   if err == nil {
-			   m.duration.With(prometheus.Labels{"operation": "insert", "method": "create_product", "db": db}).Observe(time.Since(now).Seconds())
-
-		   }
-		   return annotate(err, "pg.dbpool.QueryRow")
-	} else {
-		   if mg == nil || mg.db == nil {
-			   return fmt.Errorf("MongoDB connection is not initialized")
-		   }
-		   res, err := mg.db.Collection("product").InsertOne(mg.context, p)
-		   if err != nil {
-			   return annotate(err, "InsertOne failed")
-		   }
-		   if res.InsertedID != nil {
-			   if oid, ok := res.InsertedID.(primitive.ObjectID); ok {
-				   p.MongoId = oid.Hex()
-				   m.duration.With(prometheus.Labels{"operation": "insert", "method": "create_product", "db": db}).Observe(time.Since(now).Seconds())
-
-			   } else {
-				   p.MongoId = ""
-			   }
-		   } else {
-			   p.MongoId = ""
-		   }
-		   return nil
+		return annotate(err, "pg.dbpool.QueryRow failed")
 	}
+
+	// MongoDB
+	res, err := mg.db.Collection("product").InsertOne(mg.context, p)
+	if err != nil {
+		return annotate(err, "InsertOne failed")
+	}
+	if oid, ok := res.InsertedID.(primitive.ObjectID); ok {
+		p.MongoId = oid.Hex()
+	}
+	return nil
 }
 
 func (p *product) update(pg *postgres, mg *mongodb, db string, m *metrics) (err error) {
 	now := time.Now()
 	defer func() {
-		if err == nil {
-			   m.duration.With(prometheus.Labels{"operation": "update", "method": "update_inventory", "db": db}).Observe(time.Since(now).Seconds())
-
-		}
+		m.updateLatency.Observe(time.Since(now).Seconds())
 	}()
 
 	if db == "pg" {
 		_, err = pg.dbpool.Exec(pg.context, `UPDATE product SET jdoc = jsonb_set(jdoc, '{stock}', $1) WHERE id = $2`, p.Stock, p.PostgresId)
-
-		return annotate(err, "pg.dbpool.QueryRow")
-
-	} else {
-		   if p.MongoId == "" {
-			   return fmt.Errorf("MongoId is empty, cannot update")
-		   }
-		   id, err := primitive.ObjectIDFromHex(p.MongoId)
-		   if err != nil {
-			   return fmt.Errorf("invalid MongoId: %v", err)
-		   }
-		   filter := bson.D{{Key: "_id", Value: id}}
-		   update := bson.D{{Key: "$set", Value: bson.D{{Key: "stock", Value: p.Stock}}}}
-
-		   _, err = mg.db.Collection("product").UpdateOne(mg.context, filter, update)
-
-		   return annotate(err, "UpdateOne failed")
+		return annotate(err, "pg.dbpool.Exec for update failed")
 	}
+
+	// MongoDB
+	id, err := primitive.ObjectIDFromHex(p.MongoId)
+	if err != nil {
+		return fmt.Errorf("invalid MongoId: %w", err)
+	}
+	filter := bson.M{"_id": id}
+	update := bson.M{"$set": bson.M{"stock": p.Stock}}
+	_, err = mg.db.Collection("product").UpdateOne(mg.context, filter, update)
+	return annotate(err, "UpdateOne failed")
 }
 
 func (p *product) search(pg *postgres, mg *mongodb, db string, m *metrics, debug bool) (err error) {
 	now := time.Now()
 	defer func() {
-		if err == nil {
-			   m.duration.With(prometheus.Labels{"operation": "select", "method": "select_inventory", "db": db}).Observe(time.Since(now).Seconds())
-		}
+		m.searchLatency.Observe(time.Since(now).Seconds())
 	}()
 
 	if db == "pg" {
 		rows, err := pg.dbpool.Query(pg.context, `SELECT id, jdoc->'price' as price, jdoc->'stock' as stock FROM product WHERE (jdoc -> 'price')::numeric < $1 LIMIT 5`, 30)
+		if err != nil {
+			return annotate(err, "pg.dbpool.Query failed")
+		}
 		defer rows.Close()
 
 		if debug {
 			for rows.Next() {
-				lp := product{}
-				err := rows.Scan(&lp.PostgresId, &lp.Price, &lp.Stock)
-				fail(err, "unable to scan row")
-
+				var lp product
+				if err := rows.Scan(&lp.PostgresId, &lp.Price, &lp.Stock); err != nil {
+					return fmt.Errorf("unable to scan row: %w", err)
+				}
 			}
 		}
-
-		return annotate(err, "pg.dbpool.Query")
-	} else {
-		filter := bson.D{{Key: "price", Value: bson.D{{Key: "$lt", Value: 30}}}}
-
-		opts := options.Find().SetLimit(5)
-		cursor, err := mg.db.Collection("product").Find(mg.context, filter, opts)
-
-		if debug {
-			var results []product
-			if err = cursor.All(context.TODO(), &results); err != nil {
-				panic(err)
-			}
-			   // usunięto wypisywanie wyników
-		}
-
-		return annotate(err, "Read failed")
+		return nil
 	}
+
+	// MongoDB
+	filter := bson.M{"price": bson.M{"$lt": 30}}
+	opts := options.Find().SetLimit(5)
+	cursor, err := mg.db.Collection("product").Find(mg.context, filter, opts)
+	if err != nil {
+		return annotate(err, "Find failed")
+	}
+	defer cursor.Close(mg.context)
+
+	if debug {
+		var results []product
+		if err = cursor.All(context.TODO(), &results); err != nil {
+			return fmt.Errorf("cursor.All failed: %w", err)
+		}
+	}
+	return nil
 }
 
 func (p *product) delete(pg *postgres, mg *mongodb, db string, m *metrics) (err error) {
 	now := time.Now()
 	defer func() {
-		if err == nil {
-			   m.duration.With(prometheus.Labels{"operation": "delete", "method": "delete_cart", "db": db}).Observe(time.Since(now).Seconds())
-
-		}
+		m.deleteLatency.Observe(time.Since(now).Seconds())
 	}()
 
 	if db == "pg" {
 		_, err = pg.dbpool.Exec(pg.context, `DELETE FROM product WHERE id = $1`, p.PostgresId)
-
-		return annotate(err, "pg.dbpool.QueryRow")
-	} else {
-		   if p.MongoId == "" {
-			   return fmt.Errorf("MongoId is empty, cannot delete")
-		   }
-		   id, err := primitive.ObjectIDFromHex(p.MongoId)
-		   if err != nil {
-			   return fmt.Errorf("invalid MongoId: %v", err)
-		   }
-		   filter := bson.D{{Key: "_id", Value: id}}
-
-		   _, err = mg.db.Collection("product").DeleteOne(mg.context, filter)
-
-		   return annotate(err, "DeleteOne failed")
+		return annotate(err, "pg.dbpool.Exec for delete failed")
 	}
+
+	// MongoDB
+	id, err := primitive.ObjectIDFromHex(p.MongoId)
+	if err != nil {
+		return fmt.Errorf("invalid MongoId: %w", err)
+	}
+	filter := bson.M{"_id": id}
+	_, err = mg.db.Collection("product").DeleteOne(mg.context, filter)
+	return annotate(err, "DeleteOne failed")
 }

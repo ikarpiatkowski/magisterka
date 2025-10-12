@@ -11,16 +11,13 @@ type Config struct {
 	// Enable debug mode.
 	Debug bool `yaml:"debug"`
 
-	// MetricsPort is the port on which to expose Prometheus metrics.
-	MetricsPort int `yaml:"metricsPort"`
-
 	// Postgres is the configuration for PostgreSQL.
-	Postgres PostgresConfig `yaml:"pgx"`
+	Postgres PostgresConfig `yaml:"postgres"` // Zmieniono z "pgx" na "postgres" dla spójności
 
 	// Mongo is the configuration for MongoDB.
 	Mongo MongoConfig `yaml:"mongo"`
 
-	// Test is the configuration for MongoDB.
+	// Test is the configuration for the test parameters.
 	Test TestConfig `yaml:"test"`
 }
 
@@ -31,6 +28,7 @@ type PostgresConfig struct {
 	Host           string `yaml:"host"`
 	Database       string `yaml:"database"`
 	MaxConnections int    `yaml:"maxConnections"`
+	MetricsPort    int    `yaml:"metricsPort"` // <-- Dodano to pole
 }
 
 type MongoConfig struct {
@@ -48,6 +46,7 @@ type MongoConfig struct {
 
 	// Max connections to the database.
 	MaxConnections uint64 `yaml:"maxConnections"`
+	MetricsPort    int    `yaml:"metricsPort"` // <-- Dodano to pole
 }
 
 type TestConfig struct {
