@@ -8,22 +8,25 @@ import (
 )
 
 func main() {
-   db := flag.String("db", "", "database to test")
-   metricsPort := flag.Int("metrics-port", 8081, "port for Prometheus metrics")
-   flag.Parse()
-   validFlag(*db)
+	db := flag.String("db", "", "database to test")
+	metricsPort := flag.Int("metrics-port", 0, "port for Prometheus metrics") // Domyślnie 0
+	flag.Parse()
+	validFlag(*db)
 
-   cfg := new(Config)
-   cfg.loadConfig("config.yaml")
-   cfg.MetricsPort = *metricsPort // override config with flag
+	cfg := new(Config)
+	cfg.loadConfig("config.yaml")
 
-   if cfg.Debug {
-	   slog.SetLogLoggerLevel(slog.LevelDebug)
-   }
+	if *metricsPort != 0 {
+		cfg.MetricsPort = *metricsPort // Nadpisz tylko, jeśli flaga została podana
+	}
 
-   reg := prometheus.NewRegistry()
-   m := NewMetrics(reg)
-   StartPrometheusServer(cfg, reg)
+	if cfg.Debug {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	}
 
-   runTest(cfg, *db, m)
+	reg := prometheus.NewRegistry()
+	m := NewMetrics(reg)
+	StartPrometheusServer(cfg, reg)
+
+	runTest(cfg, *db, m)
 }

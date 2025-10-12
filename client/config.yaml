@@ -14,7 +14,7 @@ mongo:
   database: store
   maxConnections: 20
 test:
-  minClients: 20
-  maxClients: 300
-  stageIntervalS: 1
-  requestDelayMs: 100
+  minClients: 1
+  maxClients: 500
+  stageIntervalS: 2
+  requestDelayMs: 50

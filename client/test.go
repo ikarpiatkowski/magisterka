@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log/slog"
+	"sync"
+
 	"time"
 )
 
@@ -22,19 +24,20 @@ func runTest(cfg *Config, db string, m *metrics) {
 	}
 
 	sleepInterval := cfg.Test.RequestDelayMs
-
 	currentClients := cfg.Test.MinClients
 
+	var wg sync.WaitGroup
 	for {
-		clients := make(chan struct{}, currentClients)
 		slog.Info("New", "clients", currentClients)
-
 		m.clients.Set(float64(currentClients))
-		now := time.Now()
-		for {
-			clients <- struct{}{}
 
+		ticker := time.NewTicker(time.Duration(cfg.Test.StageIntervalS) * time.Second)
+		defer ticker.Stop()
+
+		for i := 0; i < currentClients; i++ {
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				// Create Product 10 products
 				var p product
 				for range 9 {
@@ -70,18 +73,15 @@ func runTest(cfg *Config, db string, m *metrics) {
 				if sleepInterval > 0 {
 					sleep(sleepInterval)
 				}
-				<-clients
 			}()
-
-			if time.Since(now).Seconds() >= float64(cfg.Test.StageIntervalS) {
-				break
-			}
 		}
 
-		if currentClients == cfg.Test.MaxClients {
+		<-ticker.C
+		wg.Wait()
+
+		if currentClients >= cfg.Test.MaxClients {
 			break
 		}
-		currentClients += 1
+		currentClients++
 	}
-
 }
