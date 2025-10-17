@@ -25,7 +25,7 @@ test:
   # This keeps a steady number of concurrent clients for the duration, so you can
   # observe indexes and metrics under load (the client still deletes documents
   # after each cycle; to keep documents, set delete to false in code).
-  minClients: 100
-  maxClients: 100
-  stageIntervalS: 120
+  minClients: 1
+  maxClients: 40
+  stageIntervalS: 1
   requestDelayMs: 50

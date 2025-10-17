@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func runTest(cfg *Config, dbType string, m *metrics) {
+func runTest(cfg *Config, dbType string, m *metrics, stageCh <-chan int) {
 	slog.Info("Starting a test", "db", dbType)
 
 	ctx, done := context.WithCancel(context.Background())
@@ -14,7 +14,7 @@ func runTest(cfg *Config, dbType string, m *metrics) {
 
 	var pg *postgres
 	var mg *mongodb
-	var es *elasticsearchStore
+    var es *elasticsearchStore
 
 	switch dbType {
 case "pg":
@@ -22,12 +22,20 @@ case "pg":
 	case "mg":
 		mg = NewMongo(ctx, cfg)
 	case "es":
-		es = NewElasticsearch(ctx, cfg)
+		// NewElasticsearch may fail if ES isn't ready. Handle the error and skip ES test
+		// instead of terminating the whole program.
+		var err error
+		es, err = NewElasticsearch(ctx, cfg)
+		if err != nil {
+			slog.Warn("Elasticsearch initialization failed, skipping ES test", "error", err)
+			return
+		}
 	}
 
 	sleepInterval := time.Duration(cfg.Test.RequestDelayMs) * time.Millisecond
 
-	for currentClients := cfg.Test.MinClients; currentClients <= cfg.Test.MaxClients; currentClients++ {
+	// stageCh will provide the number of clients for each stage. When closed, the test ends.
+	for currentClients := range stageCh {
 		slog.Info("Starting new stage", "db", dbType, "clients", currentClients)
 		m.clients.Set(float64(currentClients))
 
@@ -83,7 +91,8 @@ case "pg":
 			}()
 		}
 
-		// Poczekaj na zakończenie etapu
+		// Wait until the controller cancels the stage by closing or sending next stage
+		// The cancelStage will be called by the controller via a separate signal; here we wait for the duration
 		time.Sleep(time.Duration(cfg.Test.StageIntervalS) * time.Second)
 		cancelStage() // Zakończ wszystkie gorutyny dla tego etapu
 	}
