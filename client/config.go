@@ -17,6 +17,8 @@ type Config struct {
 	// Mongo is the configuration for MongoDB.
 	Mongo MongoConfig `yaml:"mongo"`
 
+	Elasticsearch ElasticsearchConfig `yaml:"elasticsearch"` // <-- Dodaj to pole
+
 	// Test is the configuration for the test parameters.
 	Test TestConfig `yaml:"test"`
 }
@@ -48,6 +50,12 @@ type MongoConfig struct {
 	MaxConnections uint64 `yaml:"maxConnections"`
 	MetricsPort    int    `yaml:"metricsPort"` // <-- Dodano to pole
 }
+
+type ElasticsearchConfig struct {
+	Host        string `yaml:"host"`
+	MetricsPort int    `yaml:"metricsPort"`
+}
+
 
 type TestConfig struct {
 	MinClients     int `yaml:"minClients"`

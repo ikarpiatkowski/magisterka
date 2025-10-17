@@ -1,0 +1,27 @@
+debug: true
+
+postgres:
+  user: admin
+  password: password123
+  host: postgresql
+  database: testdb
+  maxConnections: 20
+  metricsPort: 18082
+
+mongo:
+  user: admin
+  password: password123
+  host: mongodb
+  database: testdb
+  maxConnections: 20
+  metricsPort: 18081
+
+elasticsearch:
+  host: "elasticsearch:9200"
+  metricsPort: 18083
+
+test:
+  minClients: 50
+  maxClients: 50
+  stageIntervalS: 60
+  requestDelayMs: 50

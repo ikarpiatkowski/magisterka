@@ -17,7 +17,7 @@ func main() {
 
 	// Używamy WaitGroup, aby poczekać na zakończenie obu testów
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 
 	// Uruchomienie testu dla PostgreSQL w osobnej gorutynie
 	go func() {
@@ -37,6 +37,14 @@ func main() {
 		m := NewMetrics(reg, "mg") // Dodajemy etykietę "mg"
 		StartPrometheusServer(cfg.Mongo.MetricsPort, reg)
 		runTest(cfg, "mg", m)
+	}()
+
+	go func() {
+		defer wg.Done()
+		reg := prometheus.NewRegistry()
+		m := NewMetrics(reg, "es") // Etykieta "es"
+		StartPrometheusServer(cfg.Elasticsearch.MetricsPort, reg)
+		runTest(cfg, "es", m)
 	}()
 
 	// Czekaj na zakończenie obu gorutyn (testów)

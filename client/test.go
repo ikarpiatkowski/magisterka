@@ -14,11 +14,15 @@ func runTest(cfg *Config, dbType string, m *metrics) {
 
 	var pg *postgres
 	var mg *mongodb
+	var es *elasticsearchStore
 
-	if dbType == "pg" {
+	switch dbType {
+case "pg":
 		pg = NewPostgres(ctx, cfg)
-	} else {
+	case "mg":
 		mg = NewMongo(ctx, cfg)
+	case "es":
+		es = NewElasticsearch(ctx, cfg)
 	}
 
 	sleepInterval := time.Duration(cfg.Test.RequestDelayMs) * time.Millisecond
@@ -46,7 +50,7 @@ func runTest(cfg *Config, dbType string, m *metrics) {
 						}
 
 						// 1. Create - tworzymy produkt i upewniamy się, że mamy jego ID
-						if err := p.create(pg, mg, dbType, m); err != nil {
+						if err := p.create(pg, mg, es, dbType, m); err != nil {
 							m.createErrorsTotal.Inc()
 							slog.Warn("create product failed", "error", err)
 							continue // Pomiń resztę cyklu, jeśli tworzenie się nie powiodło
@@ -54,19 +58,19 @@ func runTest(cfg *Config, dbType string, m *metrics) {
 
 						// 2. Update - teraz mamy pewność, że ID istnieje
 						p.Stock = random(1, 100)
-						if err := p.update(pg, mg, dbType, m); err != nil {
+						if err := p.update(pg, mg, es, dbType, m); err != nil {
 							m.updateErrorsTotal.Inc()
 							slog.Warn("update product failed", "error", err)
 						}
 
 						// 3. Search
-						if err := p.search(pg, mg, dbType, m, cfg.Debug); err != nil {
+						if err := p.search(pg, mg, es, dbType, m, cfg.Debug); err != nil {
 							m.searchErrorsTotal.Inc()
 							slog.Warn("search product failed", "error", err)
 						}
 
 						// 4. Delete - usuwamy produkt, który stworzyliśmy
-						if err := p.delete(pg, mg, dbType, m); err != nil {
+						if err := p.delete(pg, mg, es, dbType, m); err != nil {
 							m.deleteErrorsTotal.Inc()
 							slog.Warn("delete product failed", "error", err)
 						}

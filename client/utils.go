@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
-	"slices"
-	"time"
 )
 
 // random generates a random number within a specified range.
@@ -16,13 +14,6 @@ func random(min int, max int) int {
 
 // sleep pauses the execution of the program.
 // Interval is generated randomly with the upper bound limit provided by you.
-func sleep(n int) {
-	// Generate a random number where the upper bound is n.
-	r := rand.Intn(n)
-
-	// Suspend the program's execution.
-	time.Sleep(time.Duration(r) * time.Millisecond)
-}
 
 // annotate provides an additional context for the error.
 func annotate(err error, format string, args ...any) error {
@@ -30,13 +21,6 @@ func annotate(err error, format string, args ...any) error {
 		return fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), err)
 	}
 	return nil
-}
-
-// A warn notifies you that something has gone wrong with the execution of the program.
-func warn(err error, format string, args ...any) {
-	if err != nil {
-		slog.Warn(fmt.Sprintf("%s: %s", fmt.Sprintf(format, args...), err))
-	}
 }
 
 // A fail prints the error message and then exits the program.
@@ -62,12 +46,4 @@ func genString(n int) string {
 
 	// Convert the runes to a string and return it.
 	return string(b)
-}
-
-func validFlag(db string) {
-	dbs := []string{"pg", "pg-jsonb", "mg"}
-	if !slices.Contains(dbs, db) {
-		slog.Error("database is not supported", "db", db, "options", dbs)
-		os.Exit(1)
-	}
 }

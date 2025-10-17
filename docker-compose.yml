@@ -177,11 +177,13 @@ services:
     ports:
       - "8081:8081"
       - "8082:8082"
+      - "8083:8083"
     networks:
       - monitoring
     depends_on:
       - postgresql
       - mongodb
+      - elasticsearch
     command: ["tail", "-f", "/dev/null"] # <-- Upewnij się, że ta linia jest obecna
 volumes:
   mongodb_data:
