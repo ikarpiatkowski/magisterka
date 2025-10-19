@@ -17,6 +17,6 @@ COPY --from=builder /client .
 
 COPY config.yaml .
 
-EXPOSE 8081 8082
+EXPOSE 8081 8082 8083
 
 CMD ["/app/client"]
