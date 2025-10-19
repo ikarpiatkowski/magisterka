@@ -25,7 +25,6 @@ type product struct {
 	Colors          []string `bson:"colors,omitempty" json:"colors,omitempty"`
 }
 
-// Przywrócono Twoją oryginalną logikę 'defer' i dodano obsługę Elasticsearch
 func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics) (err error) {
 	now := time.Now()
 	defer func() {
@@ -158,7 +157,6 @@ case "pg":
 			return annotate(err, "pg.dbpool.Query failed")
 		}
 		defer rows.Close()
-		// Pusta pętla do odczytania wyników, jeśli debug jest włączony
 		if debug {
 			for rows.Next() {
 			}

@@ -14,14 +14,10 @@ type elasticsearchStore struct {
 	context context.Context
 }
 
-// NewElasticsearch attempts to create and verify an Elasticsearch client.
-// It retries a few times before returning an error so the calling code can
-// decide whether to skip the ES test or fail the whole process.
 func NewElasticsearch(ctx context.Context, c *Config) (*elasticsearchStore, error) {
 	es := &elasticsearchStore{context: ctx}
 
 	addr := c.Elasticsearch.Host
-	// Allow user to specify host as either "host:port" or full URL
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = fmt.Sprintf("http://%s", addr)
 	}
@@ -35,8 +31,6 @@ func NewElasticsearch(ctx context.Context, c *Config) (*elasticsearchStore, erro
 		return nil, fmt.Errorf("unable to create Elasticsearch client: %w", err)
 	}
 
-	// Try to contact the cluster a few times before giving up. This helps when
-	// Docker Compose starts services concurrently and ES isn't ready yet.
 	var lastErr error
 	for i := 0; i < 10; i++ {
 		res, err := client.Info(client.Info.WithContext(ctx))

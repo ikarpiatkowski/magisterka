@@ -6,49 +6,32 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Config represents a configuration file for the program.
 type Config struct {
-	// Enable debug mode.
 	Debug bool `yaml:"debug"`
 
-	// Postgres is the configuration for PostgreSQL.
-	Postgres PostgresConfig `yaml:"postgres"` // Zmieniono z "pgx" na "postgres" dla spójności
+	Elasticsearch 	ElasticsearchConfig `yaml:"elasticsearch"`
+	Postgres    	PostgresConfig    	`yaml:"postgres"`
+	Mongo       	MongoConfig       	`yaml:"mongo"`
 
-	// Mongo is the configuration for MongoDB.
-	Mongo MongoConfig `yaml:"mongo"`
-
-	Elasticsearch ElasticsearchConfig `yaml:"elasticsearch"` // <-- Dodaj to pole
-
-	// Test is the configuration for the test parameters.
 	Test TestConfig `yaml:"test"`
 }
-
-// PostgresConfig represents a configuration file for the PostgreSQL.
+	
 type PostgresConfig struct {
 	User           string `yaml:"user"`
 	Password       string `yaml:"password"`
 	Host           string `yaml:"host"`
 	Database       string `yaml:"database"`
 	MaxConnections int    `yaml:"maxConnections"`
-	MetricsPort    int    `yaml:"metricsPort"` // <-- Dodano to pole
+	MetricsPort    int    `yaml:"metricsPort"`
 }
 
 type MongoConfig struct {
-	// User to connect database.
-	User string `yaml:"user"`
-
-	// Password to connect database.
-	Password string `yaml:"password"`
-
-	// Host to connect database.
-	Host string `yaml:"host"`
-
-	// Database to store images.
-	Database string `yaml:"database"`
-
-	// Max connections to the database.
+	User           string `yaml:"user"`
+	Password       string `yaml:"password"`
+	Host           string `yaml:"host"`
+	Database       string `yaml:"database"`
 	MaxConnections uint64 `yaml:"maxConnections"`
-	MetricsPort    int    `yaml:"metricsPort"` // <-- Dodano to pole
+	MetricsPort    int    `yaml:"metricsPort"`
 }
 
 type ElasticsearchConfig struct {
@@ -64,13 +47,10 @@ type TestConfig struct {
 	RequestDelayMs int `yaml:"requestDelayMs"`
 }
 
-// loadConfig reads the configuration file from the disk into a Go struct.
 func (c *Config) loadConfig(path string) {
-	// Read the file from the disk.
 	f, err := os.ReadFile(path)
 	fail(err, "os.ReadFile failed")
 
-	// Convert YAML content to a Go struct.
 	err = yaml.Unmarshal(f, c)
 	fail(err, "yaml.Unmarshal failed")
 }

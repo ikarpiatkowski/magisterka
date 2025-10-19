@@ -6,7 +6,7 @@ postgres:
   host: postgresql
   database: testdb
   maxConnections: 20
-  metricsPort: 8082 # <-- Port dla metryk PostgreSQL
+  metricsPort: 8082
 
 mongo:
   user: admin
@@ -14,17 +14,13 @@ mongo:
   host: mongodb
   database: testdb
   maxConnections: 20
-  metricsPort: 8081 # <-- Port dla metryk MongoDB
+  metricsPort: 8081
 
 elasticsearch:
   host: "elasticsearch:9200"
   metricsPort: 8083
 
 test:
-  # For a sustained load test set minClients == maxClients and a longer stage interval.
-  # This keeps a steady number of concurrent clients for the duration, so you can
-  # observe indexes and metrics under load (the client still deletes documents
-  # after each cycle; to keep documents, set delete to false in code).
   minClients: 1
   maxClients: 100
   stageIntervalS: 1

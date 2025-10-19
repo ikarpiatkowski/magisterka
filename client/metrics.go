@@ -9,8 +9,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Zoptymalizowana, logarytmiczna lista koszyków.
-// Zapewnia wysoką rozdzielczość dla bardzo szybkich operacji i mniejszą dla wolniejszych.
 var buckets = []float64{
 	0.00001, 0.000025, 0.00005, 0.000075, // < 100 mikrosekund
 	0.0001, 0.00025, 0.0005, 0.00075,   // < 1 milisekunda
@@ -20,7 +18,6 @@ var buckets = []float64{
 	1.0, 2.5, 5.0,                    // wolne operacje
 }
 
-// metrics przechowuje wszystkie metryki Prometheus dla jednego testu.
 type metrics struct {
 	clients           prometheus.Gauge
 	createLatency     prometheus.Histogram
@@ -33,7 +30,6 @@ type metrics struct {
 	deleteErrorsTotal prometheus.Counter
 }
 
-// NewMetrics tworzy i rejestruje metryki Prometheus.
 func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 	m := &metrics{
 		clients: prometheus.NewGauge(prometheus.GaugeOpts{
