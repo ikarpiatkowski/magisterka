@@ -16,7 +16,7 @@ type postgres struct {
 func NewPostgres(ctx context.Context, c *Config) *postgres {
 	pg := postgres{
 		config:  c,
-		context: ctx,
+		context: context.Background(),
 	}
 	pg.pgConnect(ctx)
 
@@ -26,8 +26,7 @@ func NewPostgres(ctx context.Context, c *Config) *postgres {
 func (pg *postgres) pgConnect(ctx context.Context) {
 	url := fmt.Sprintf("postgres://%s:%s@%s:5432/%s?pool_max_conns=%d",
 		pg.config.Postgres.User, pg.config.Postgres.Password, pg.config.Postgres.Host, pg.config.Postgres.Database, pg.config.Postgres.MaxConnections)
-
-	dbpool, err := pgxpool.New(ctx, url)
+	dbpool, err := pgxpool.New(context.Background(), url)
 	fail(err, "Unable to create connection pool")
 
 	pg.dbpool = dbpool

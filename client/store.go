@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -31,6 +31,8 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 			m.createLatency.Observe(time.Since(now).Seconds())
 		case "mg":
 			m.createLatency.Observe(time.Since(now).Seconds())
+		case "es":
+			m.createLatency.Observe(time.Since(now).Seconds())
 		}
 	}()
 
@@ -51,7 +53,49 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 			p.MongoId = oid.Hex()
 		}
 		return nil
-	// Usunięto case "es"
+	case "es":
+		b, err := json.Marshal(p)
+		if err != nil {
+			return fmt.Errorf("json.Marshal failed: %w", err)
+		}
+		// Use Index API; if p.ElasticsearchId is empty, ES will generate an id.
+		if p.ElasticsearchId == "" {
+			res, err := es.client.Index(
+				es.Cfg.IndexName,
+				bytes.NewReader(b),
+				es.client.Index.WithContext(es.context),
+			)
+			if err != nil {
+				return fmt.Errorf("Index failed: %w", err)
+			}
+			defer res.Body.Close()
+			if res.IsError() {
+				return fmt.Errorf("error indexing document: %s", res.String())
+			}
+			var r map[string]interface{}
+			if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+				return fmt.Errorf("error parsing the response body: %s", err)
+			}
+			if id, ok := r["_id"].(string); ok {
+				p.ElasticsearchId = id
+			}
+			return nil
+		}
+		// If ID present, index with that ID (upsert semantics)
+		res, err := es.client.Index(
+			es.Cfg.IndexName,
+			bytes.NewReader(b),
+			es.client.Index.WithDocumentID(p.ElasticsearchId),
+			es.client.Index.WithContext(es.context),
+		)
+		if err != nil {
+			return fmt.Errorf("Index failed: %w", err)
+		}
+		defer res.Body.Close()
+		if res.IsError() {
+			return fmt.Errorf("error indexing document: %s", res.String())
+		}
+		return nil
 	}
 	return fmt.Errorf("unknown database type: %s", db)
 }
@@ -63,6 +107,8 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		case "pg":
 			m.updateLatency.Observe(time.Since(now).Seconds())
 		case "mg":
+			m.updateLatency.Observe(time.Since(now).Seconds())
+		case "es":
 			m.updateLatency.Observe(time.Since(now).Seconds())
 		}
 	}()
@@ -80,7 +126,28 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		update := bson.M{"$set": bson.M{"stock": p.Stock}}
 		_, err = mg.db.Collection("product").UpdateOne(mg.context, filter, update)
 		return annotate(err, "UpdateOne failed")
-	// Usunięto case "es"
+	case "es":
+		// Use Update API with doc to send only changed fields (faster than full reindex)
+		doc := map[string]interface{}{"doc": map[string]interface{}{"stock": p.Stock}}
+		var buf bytes.Buffer
+		if err := json.NewEncoder(&buf).Encode(doc); err != nil {
+			return fmt.Errorf("error encoding update doc: %w", err)
+		}
+		res, err := es.client.Update(
+			es.Cfg.IndexName,
+			p.ElasticsearchId,
+			&buf,
+			es.client.Update.WithContext(es.context),
+			es.client.Update.WithRefresh("false"),
+		)
+		if err != nil {
+			return fmt.Errorf("Index (update) failed: %w", err)
+		}
+		defer res.Body.Close()
+		if res.IsError() {
+			return fmt.Errorf("error updating document: %s", res.String())
+		}
+		return nil
 	}
 	return fmt.Errorf("unknown database type: %s", db)
 }
@@ -92,6 +159,8 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		case "pg":
 			m.searchLatency.Observe(time.Since(now).Seconds())
 		case "mg":
+			m.searchLatency.Observe(time.Since(now).Seconds())
+		case "es":
 			m.searchLatency.Observe(time.Since(now).Seconds())
 		}
 	}()
@@ -118,7 +187,32 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		defer cursor.Close(mg.context)
 		if debug {
 			var results []product
-			cursor.All(context.Background(), &results)
+			cursor.All(mg.context, &results)
+		}
+		return nil
+	case "es":
+		var buf bytes.Buffer
+		query := map[string]interface{}{
+			"query": map[string]interface{}{
+				"range": map[string]interface{}{"price": map[string]interface{}{"lt": 30}},
+			},
+			"size": 5,
+		}
+		if err := json.NewEncoder(&buf).Encode(query); err != nil {
+			return fmt.Errorf("error encoding query: %w", err)
+		}
+		res, err := es.client.Search(
+			es.client.Search.WithContext(es.context),
+			es.client.Search.WithIndex(es.Cfg.IndexName),
+			es.client.Search.WithBody(&buf),
+			es.client.Search.WithSize(5),
+		)
+		if err != nil {
+			return fmt.Errorf("search request failed: %w", err)
+		}
+		defer res.Body.Close()
+		if res.IsError() {
+			return fmt.Errorf("error searching documents: %s", res.String())
 		}
 		return nil
 	}
@@ -132,6 +226,8 @@ func (p *product) delete(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		case "pg":
 			m.deleteLatency.Observe(time.Since(now).Seconds())
 		case "mg":
+			m.deleteLatency.Observe(time.Since(now).Seconds())
+		case "es":
 			m.deleteLatency.Observe(time.Since(now).Seconds())
 		}
 	}()
@@ -148,7 +244,21 @@ func (p *product) delete(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		filter := bson.M{"_id": id}
 		_, err = mg.db.Collection("product").DeleteOne(mg.context, filter)
 		return annotate(err, "DeleteOne failed")
-	// Usunięto case "es"
+	case "es":
+		res, err := es.client.Delete(
+			es.Cfg.IndexName,
+			p.ElasticsearchId,
+			es.client.Delete.WithContext(es.context),
+			es.client.Delete.WithRefresh("false"),
+		)
+		if err != nil {
+			return fmt.Errorf("Delete failed: %w", err)
+		}
+		defer res.Body.Close()
+		if res.IsError() {
+			return fmt.Errorf("error deleting document: %s", res.String())
+		}
+		return nil
 	}
 	return fmt.Errorf("unknown database type: %s", db)
 }

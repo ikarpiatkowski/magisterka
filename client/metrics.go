@@ -34,10 +34,10 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 	createLatencyHelp := "Latency of create operations in seconds."
 	createErrorsHelp := "Total number of create errors."
 
-	// Zmieniamy opisy metryk dla ES, aby pasowały do testu bulk
+	// For ES use generic create help (per-op CRUD)
 	if dbLabel == "es" {
-		createLatencyHelp = "Latency of bulk write operations (index/update/delete) in seconds."
-		createErrorsHelp = "Total number of bulk write errors."
+		createLatencyHelp = "Latency of create (index) operations in seconds."
+		createErrorsHelp = "Total number of create (index) errors."
 	}
 
 	m := &metrics{

@@ -17,7 +17,7 @@ type mongodb struct {
 func NewMongo(ctx context.Context, c *Config) *mongodb {
 	mg := mongodb{
 		config:  c,
-		context: ctx,
+		context: context.Background(),
 	}
 	mg.mgConnect(ctx)
 
@@ -34,7 +34,7 @@ func (mg *mongodb) mgConnect(ctx context.Context) {
 
 	opts := options.Client().SetMaxPoolSize(mg.config.Mongo.MaxConnections)
 
-	client, err := mongo.Connect(ctx, opts.ApplyURI(uri))
+	client, err := mongo.Connect(context.Background(), opts.ApplyURI(uri))
 	fail(err, "Unable to create connection pool")
 
 	mg.db = client.Database(mg.config.Mongo.Database)

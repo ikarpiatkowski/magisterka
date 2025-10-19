@@ -38,8 +38,7 @@ type ElasticsearchConfig struct {
 	Host                    string `yaml:"host"`
 	MetricsPort             int    `yaml:"metricsPort"`
 	IndexName               string `yaml:"indexName"`
-	OpsPerBulk              int    `yaml:"opsPerBulk"`
-	WriteProbabilityPercent int    `yaml:"writeProbabilityPercent"`
+	// Removed OpsPerBulk and WriteProbabilityPercent - ES now uses per-CRUD operations
 }
 
 type TestConfig struct {
