@@ -26,6 +26,6 @@ test:
   # observe indexes and metrics under load (the client still deletes documents
   # after each cycle; to keep documents, set delete to false in code).
   minClients: 1
-  maxClients: 40
+  maxClients: 100
   stageIntervalS: 1
-  requestDelayMs: 50
+  requestDelayMs: 250
