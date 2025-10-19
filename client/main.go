@@ -3,7 +3,8 @@ package main
 import (
 	"log/slog"
 	"sync"
-	"time"
+
+	// "time" // Już niepotrzebne
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -19,14 +20,15 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(3)
 
-	stageCh := make(chan int)
+	// KANAŁ USUNIĘTY - JUŻ NIE JEST POTRZEBNY
+	// stageCh := make(chan int)
 
 	go func() {
 		defer wg.Done()
 		reg := prometheus.NewRegistry()
 		m := NewMetrics(reg, "pg")
 		StartPrometheusServer(cfg.Postgres.MetricsPort, reg)
-		runTest(cfg, "pg", m, stageCh)
+		runTest(cfg, "pg", m) // Przekazujemy już tylko 3 argumenty
 	}()
 
 	go func() {
@@ -34,7 +36,7 @@ func main() {
 		reg := prometheus.NewRegistry()
 		m := NewMetrics(reg, "mg")
 		StartPrometheusServer(cfg.Mongo.MetricsPort, reg)
-		runTest(cfg, "mg", m, stageCh)
+		runTest(cfg, "mg", m) // Przekazujemy już tylko 3 argumenty
 	}()
 
 	go func() {
@@ -42,16 +44,11 @@ func main() {
 		reg := prometheus.NewRegistry()
 		m := NewMetrics(reg, "es")
 		StartPrometheusServer(cfg.Elasticsearch.MetricsPort, reg)
-		runTest(cfg, "es", m, stageCh)
+		runTest(cfg, "es", m) // Przekazujemy już tylko 3 argumenty
 	}()
 
-	go func() {
-		for currentClients := cfg.Test.MinClients; currentClients <= cfg.Test.MaxClients; currentClients++ {
-			stageCh <- currentClients
-			time.Sleep(time.Duration(cfg.Test.StageIntervalS) * time.Second)
-		}
-		close(stageCh)
-	}()
+	// PĘTLA RAMP-UP USUNIĘTA - ZOSTAŁA PRZENIESIONA DO runTest
+	// go func() { ... }()
 
 	wg.Wait()
 	slog.Info("All tests finished.")

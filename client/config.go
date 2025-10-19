@@ -9,13 +9,13 @@ import (
 type Config struct {
 	Debug bool `yaml:"debug"`
 
-	Elasticsearch 	ElasticsearchConfig `yaml:"elasticsearch"`
-	Postgres    	PostgresConfig    	`yaml:"postgres"`
-	Mongo       	MongoConfig       	`yaml:"mongo"`
+	Elasticsearch ElasticsearchConfig `yaml:"elasticsearch"`
+	Postgres      PostgresConfig      `yaml:"postgres"`
+	Mongo         MongoConfig         `yaml:"mongo"`
 
 	Test TestConfig `yaml:"test"`
 }
-	
+
 type PostgresConfig struct {
 	User           string `yaml:"user"`
 	Password       string `yaml:"password"`
@@ -35,10 +35,12 @@ type MongoConfig struct {
 }
 
 type ElasticsearchConfig struct {
-	Host        string `yaml:"host"`
-	MetricsPort int    `yaml:"metricsPort"`
+	Host                    string `yaml:"host"`
+	MetricsPort             int    `yaml:"metricsPort"`
+	IndexName               string `yaml:"indexName"`
+	OpsPerBulk              int    `yaml:"opsPerBulk"`
+	WriteProbabilityPercent int    `yaml:"writeProbabilityPercent"`
 }
-
 
 type TestConfig struct {
 	MinClients     int `yaml:"minClients"`

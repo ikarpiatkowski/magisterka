@@ -31,6 +31,15 @@ type metrics struct {
 }
 
 func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
+	createLatencyHelp := "Latency of create operations in seconds."
+	createErrorsHelp := "Total number of create errors."
+
+	// Zmieniamy opisy metryk dla ES, aby pasowały do testu bulk
+	if dbLabel == "es" {
+		createLatencyHelp = "Latency of bulk write operations (index/update/delete) in seconds."
+		createErrorsHelp = "Total number of bulk write errors."
+	}
+
 	m := &metrics{
 		clients: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace:   "client",
@@ -40,8 +49,8 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 		}),
 		createLatency: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace:   "client",
-			Name:        "create_latency_seconds",
-			Help:        "Latency of create operations in seconds.",
+			Name:        "create_latency_seconds", // Nazwa zostaje, ale 'Help' się zmienia
+			Help:        createLatencyHelp,
 			Buckets:     buckets,
 			ConstLabels: prometheus.Labels{"db": dbLabel},
 		}),
@@ -68,8 +77,8 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 		}),
 		createErrorsTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   "client",
-			Name:        "create_errors_total",
-			Help:        "Total number of create errors.",
+			Name:        "create_errors_total", // Nazwa zostaje
+			Help:        createErrorsHelp,
 			ConstLabels: prometheus.Labels{"db": dbLabel},
 		}),
 		updateErrorsTotal: prometheus.NewCounter(prometheus.CounterOpts{
@@ -97,7 +106,6 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 	)
 	return m
 }
-
 
 func StartPrometheusServer(port int, reg *prometheus.Registry) {
 	go func() {

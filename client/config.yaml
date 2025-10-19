@@ -19,6 +19,9 @@ mongo:
 elasticsearch:
   host: "elasticsearch:9200"
   metricsPort: 8083
+  indexName: "productss"
+  opsPerBulk: 20
+  writeProbabilityPercent: 30
 
 test:
   minClients: 1
