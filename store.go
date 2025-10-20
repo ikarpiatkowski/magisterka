@@ -118,15 +118,33 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 			return fmt.Errorf("error encoding update doc: %w", err)
 		}
 		// Enqueue update using bulk API
+		// Try via bulk first, then fallback with limited retries on not_found
 		if _, err := es.EnqueueBulk("update", es.Cfg.IndexName, p.ElasticsearchId, buf.Bytes()); err != nil {
-			// fallback to single update
-			res, err := es.client.Update(es.Cfg.IndexName, p.ElasticsearchId, &buf, es.client.Update.WithContext(es.context), es.client.Update.WithRefresh("false"))
-			if err != nil {
-				return fmt.Errorf("index (update) failed after bulk fallback: %w", err)
+			// fallback to single update with retry on 404
+			var lastErr error
+			for attempt := 0; attempt < 2; attempt++ {
+				res, err := es.client.Update(es.Cfg.IndexName, p.ElasticsearchId, &buf, es.client.Update.WithContext(es.context), es.client.Update.WithRefresh("false"))
+				if err != nil {
+					lastErr = err
+				} else {
+					defer res.Body.Close()
+					if res.IsError() {
+						lastErr = fmt.Errorf("error updating document: %s", res.String())
+						// check for 404-like in body or status
+						if res.StatusCode == 404 {
+							// wait a bit and retry
+							time.Sleep(75 * time.Millisecond)
+							continue
+						}
+						break
+					} else {
+						lastErr = nil
+						break
+					}
+				}
 			}
-			defer res.Body.Close()
-			if res.IsError() {
-				return fmt.Errorf("error updating document: %s", res.String())
+			if lastErr != nil {
+				return fmt.Errorf("index (update) failed after bulk fallback: %w", lastErr)
 			}
 		}
 		return nil
@@ -211,14 +229,29 @@ func (p *product) delete(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 	case "es":
 		// Enqueue delete using bulk API
 		if _, err := es.EnqueueBulk("delete", es.Cfg.IndexName, p.ElasticsearchId, nil); err != nil {
-			// fallback to single delete
-			res, err := es.client.Delete(es.Cfg.IndexName, p.ElasticsearchId, es.client.Delete.WithContext(es.context), es.client.Delete.WithRefresh("false"))
-			if err != nil {
-				return fmt.Errorf("delete failed after bulk fallback: %w", err)
+			// fallback to single delete with retry on not_found
+			var lastErr error
+			for attempt := 0; attempt < 2; attempt++ {
+				res, err := es.client.Delete(es.Cfg.IndexName, p.ElasticsearchId, es.client.Delete.WithContext(es.context), es.client.Delete.WithRefresh("false"))
+				if err != nil {
+					lastErr = err
+				} else {
+					defer res.Body.Close()
+					if res.IsError() {
+						lastErr = fmt.Errorf("error deleting document: %s", res.String())
+						if res.StatusCode == 404 {
+							time.Sleep(75 * time.Millisecond)
+							continue
+						}
+						break
+					} else {
+						lastErr = nil
+						break
+					}
+				}
 			}
-			defer res.Body.Close()
-			if res.IsError() {
-				return fmt.Errorf("error deleting document: %s", res.String())
+			if lastErr != nil {
+				return fmt.Errorf("delete failed after bulk fallback: %w", lastErr)
 			}
 		}
 		return nil

@@ -66,8 +66,8 @@ func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elasticsearc
 		Cfg:         &c.Elasticsearch,
 		m:           m,
 		bulkCh:      make(chan *bulkItem, 200),
-		bulkSize:    50,
-		bulkTimeout: 500 * time.Millisecond,
+	bulkSize:    20,
+	bulkTimeout: 1 * time.Millisecond,
 		pending:     make(map[string]chan struct{}),
 	}
 
