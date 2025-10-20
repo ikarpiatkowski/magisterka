@@ -19,9 +19,9 @@ func runTest(cfg *Config, dbType string, m *metrics) {
 
 	switch dbType {
 	case "pg":
-		pg = NewPostgres(ctx, cfg)
+		pg = NewPostgres(cfg)
 	case "mg":
-		mg = NewMongo(ctx, cfg)
+		mg = NewMongo(cfg)
 	case "es":
 		var err error
 		es, err = NewElasticsearch(ctx, cfg, m)

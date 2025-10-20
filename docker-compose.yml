@@ -1,6 +1,6 @@
 services:
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    image: ghcr.io/google/cadvisor:v0.53.0
     container_name: cadvisor
     restart: unless-stopped
     ports:
@@ -10,6 +10,14 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    privileged: true
+    command:
+      - "/usr/bin/cadvisor"
+      - "-logtostderr"
+      - "--storage_driver_ignore=btrfs"
     networks:
       - monitoring
 
@@ -91,7 +99,7 @@ services:
       retries: 3
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:latest
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.1.5
     container_name: elasticsearch
     restart: unless-stopped
     ports:
@@ -99,7 +107,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
     volumes:
       - es_data:/usr/share/elasticsearch/data
     networks:
@@ -185,7 +193,7 @@ services:
       - postgresql
       - mongodb
       - elasticsearch
-    command: ["tail", "-f", "/dev/null"]
+
 volumes:
   mongodb_data:
   postgresql_data:

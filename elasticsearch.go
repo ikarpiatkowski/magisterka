@@ -14,7 +14,6 @@ import (
 	es9 "github.com/elastic/go-elasticsearch/v9"
 )
 
-// genLocalID generuje prosty unikalny identyfikator oparty na czasie i nanosekundach
 func genLocalID() string {
 	return fmt.Sprintf("local-%d", time.Now().UnixNano())
 }
@@ -24,18 +23,16 @@ type elasticsearchStore struct {
 	context context.Context
 	Cfg     *ElasticsearchConfig
 	m       *metrics
-	// bulk processor
 	bulkCh      chan *bulkItem
 	bulkSize    int
 	bulkTimeout time.Duration
 	bulkWG      sync.WaitGroup
-	// pending index acknowledgements
 	pendingMu sync.Mutex
 	pending   map[string]chan struct{}
 }
 
 type bulkItem struct {
-	op    string // index|update|delete
+	op    string
 	index string
 	id    string
 	body  []byte
@@ -65,13 +62,12 @@ func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elasticsearc
 		context:     ctx,
 		Cfg:         &c.Elasticsearch,
 		m:           m,
-		bulkCh:      make(chan *bulkItem, 200),
-	bulkSize:    20,
-	bulkTimeout: 1 * time.Millisecond,
+		bulkCh:      make(chan *bulkItem, 2000),
+		bulkSize:    500,
+		bulkTimeout: 1 * time.Millisecond,
 		pending:     make(map[string]chan struct{}),
 	}
 
-	// start bulk processor
 	es.bulkWG.Add(1)
 	go func() {
 		defer es.bulkWG.Done()
@@ -92,7 +88,6 @@ func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elasticsearc
 		time.Sleep(2 * time.Second)
 	}
 
-	// stop bulk processor if init failed
 	close(es.bulkCh)
 	es.bulkWG.Wait()
 
@@ -114,7 +109,6 @@ func (es *elasticsearchStore) runBulkProcessor() {
 		select {
 		case it, ok := <-es.bulkCh:
 			if !ok {
-				// channel closed, flush remaining
 				flush(batch)
 				return
 			}
@@ -147,7 +141,6 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 		case "index":
 			meta := map[string]map[string]string{"index": {"_index": it.index, "_id": it.id}}
 			if it.id == "" {
-				// remove _id if empty
 				meta = map[string]map[string]string{"index": {"_index": it.index}}
 			}
 			mline, _ := json.Marshal(meta)
@@ -183,7 +176,6 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 		return
 	}
 	defer res.Body.Close()
-	// parse bulk response to extract ids for indexed items and propagate errors
 	var resp map[string]interface{}
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		slog.Warn("failed to decode bulk response", "error", err)
@@ -201,7 +193,6 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 		var gotID string
 		if i < len(itms) {
 			if entry, ok := itms[i].(map[string]interface{}); ok {
-				// entry has one key: operation name
 				for _, v := range entry {
 					if m, ok := v.(map[string]interface{}); ok {
 						if sid, ok := m["_id"].(string); ok {
@@ -213,7 +204,6 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 						if statusF, ok := m["status"].(float64); ok {
 							status := int(statusF)
 							if status >= 400 {
-								// if status indicates error and no specific error parsed
 								if resultErr == nil {
 									resultErr = fmt.Errorf("bulk item failed with status %d", status)
 								}
@@ -226,7 +216,6 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 		if it.done != nil {
 			it.done <- bulkResult{id: gotID, err: resultErr}
 		}
-		// if this was an index op and succeeded, notify waiters
 		if it.op == "index" && resultErr == nil && gotID != "" {
 			es.pendingMu.Lock()
 			if ch, ok := es.pending[gotID]; ok {
@@ -238,15 +227,12 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 	}
 }
 
-// EnqueueBulk pushes an operation to the bulk channel and waits for confirmation (with timeout)
 func (es *elasticsearchStore) EnqueueBulk(op, index, id string, body []byte) (string, error) {
-	// generate local id for index ops with auto-id to avoid waiting for bulk response
 	if op == "index" && id == "" {
 		id = genLocalID()
 	}
 
 	it := &bulkItem{op: op, index: index, id: id, body: body, done: make(chan bulkResult, 1)}
-	// for index ops, create pending channel so updates can wait for visibility
 	if op == "index" {
 		es.pendingMu.Lock()
 		if _, exists := es.pending[id]; !exists {
@@ -255,44 +241,28 @@ func (es *elasticsearchStore) EnqueueBulk(op, index, id string, body []byte) (st
 		es.pendingMu.Unlock()
 	}
 
-	// Try enqueue without blocking; if full, still queue synchronously to avoid losing op
 	select {
-	case es.bulkCh <- it:
-		// enqueued, return id immediately for index operations
-		if op == "index" {
-			return id, nil
-		}
-	default:
-		// channel full -> execute single-item bulk synchronously and wait for result
-		es.flushBulk([]*bulkItem{it})
-	}
-
-	// For non-index ops we wait for confirmation; for index we returned early when enqueued
-	if op == "index" {
-		// if we didn't return earlier (e.g., channel full handled synchronously), try to read result non-blocking
-		select {
-		case res := <-it.done:
-			return res.id, res.err
+		case es.bulkCh <- it:
 		default:
-			return id, nil
-		}
+			es.flushBulk([]*bulkItem{it})
 	}
 
 	select {
-	case res := <-it.done:
-		return res.id, res.err
-	case <-time.After(8 * time.Second):
-		return "", fmt.Errorf("bulk enqueue timeout")
-	}
+		case res := <-it.done:
+			if res.id != "" {
+				return res.id, res.err
+			}
+			return id, res.err
+		case <-time.After(8 * time.Second):
+			return "", fmt.Errorf("bulk enqueue timeout")
+		}
 }
 
-// WaitForIndex waits until an index operation for id is confirmed (or timeout).
 func (es *elasticsearchStore) WaitForIndex(id string, timeout time.Duration) bool {
 	es.pendingMu.Lock()
 	ch, ok := es.pending[id]
 	es.pendingMu.Unlock()
 	if !ok {
-		// no pending entry, assume visible
 		return true
 	}
 	select {

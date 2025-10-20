@@ -23,6 +23,6 @@ elasticsearch:
 
 test:
   minClients: 1
-  maxClients: 400
-  stageIntervalS: 1
+  maxClients: 100
+  stageIntervalS: 5
   requestDelayMs: 250

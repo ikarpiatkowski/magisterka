@@ -49,11 +49,8 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		if err != nil {
 			return fmt.Errorf("json.Marshal failed: %w", err)
 		}
-		// Use bulk enqueue to reduce number of requests
 		if p.ElasticsearchId == "" {
-			// no id provided - index auto-id
 			if id, err := es.EnqueueBulk("index", es.Cfg.IndexName, "", b); err != nil {
-				// fallback: synchronous single index
 				res, err := es.client.Index(es.Cfg.IndexName, bytes.NewReader(b), es.client.Index.WithContext(es.context))
 				if err != nil {
 					return fmt.Errorf("index failed after bulk fallback: %w", err)
@@ -77,7 +74,6 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 			}
 		}
 		if _, err := es.EnqueueBulk("index", es.Cfg.IndexName, p.ElasticsearchId, b); err != nil {
-			// fallback to immediate index
 			res, err := es.client.Index(es.Cfg.IndexName, bytes.NewReader(b), es.client.Index.WithDocumentID(p.ElasticsearchId), es.client.Index.WithContext(es.context))
 			if err != nil {
 				return fmt.Errorf("index failed after bulk fallback: %w", err)
@@ -111,16 +107,12 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		_, err = mg.db.Collection("product").UpdateOne(mg.context, filter, update)
 		return annotate(err, "UpdateOne failed")
 	case "es":
-		// Use Update API with doc to send only changed fields (faster than full reindex)
 		doc := map[string]interface{}{"doc": map[string]interface{}{"stock": p.Stock}}
 		var buf bytes.Buffer
 		if err := json.NewEncoder(&buf).Encode(doc); err != nil {
 			return fmt.Errorf("error encoding update doc: %w", err)
 		}
-		// Enqueue update using bulk API
-		// Try via bulk first, then fallback with limited retries on not_found
 		if _, err := es.EnqueueBulk("update", es.Cfg.IndexName, p.ElasticsearchId, buf.Bytes()); err != nil {
-			// fallback to single update with retry on 404
 			var lastErr error
 			for attempt := 0; attempt < 2; attempt++ {
 				res, err := es.client.Update(es.Cfg.IndexName, p.ElasticsearchId, &buf, es.client.Update.WithContext(es.context), es.client.Update.WithRefresh("false"))
@@ -130,9 +122,7 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 					defer res.Body.Close()
 					if res.IsError() {
 						lastErr = fmt.Errorf("error updating document: %s", res.String())
-						// check for 404-like in body or status
 						if res.StatusCode == 404 {
-							// wait a bit and retry
 							time.Sleep(75 * time.Millisecond)
 							continue
 						}
@@ -227,9 +217,7 @@ func (p *product) delete(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		_, err = mg.db.Collection("product").DeleteOne(mg.context, filter)
 		return annotate(err, "DeleteOne failed")
 	case "es":
-		// Enqueue delete using bulk API
 		if _, err := es.EnqueueBulk("delete", es.Cfg.IndexName, p.ElasticsearchId, nil); err != nil {
-			// fallback to single delete with retry on not_found
 			var lastErr error
 			for attempt := 0; attempt < 2; attempt++ {
 				res, err := es.client.Delete(es.Cfg.IndexName, p.ElasticsearchId, es.client.Delete.WithContext(es.context), es.client.Delete.WithRefresh("false"))

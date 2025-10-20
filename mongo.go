@@ -14,17 +14,16 @@ type mongodb struct {
 	context context.Context
 }
 
-func NewMongo(ctx context.Context, c *Config) *mongodb {
+func NewMongo(c *Config) *mongodb {
 	mg := mongodb{
 		config:  c,
 		context: context.Background(),
 	}
-	mg.mgConnect(ctx)
-
+	mg.mgConnect()
 	return &mg
 }
 
-func (mg *mongodb) mgConnect(ctx context.Context) {
+func (mg *mongodb) mgConnect() {
 	var uri string
 	if mg.config.Mongo.User != "" && mg.config.Mongo.Password != "" {
 		uri = fmt.Sprintf("mongodb://%s:%s@%s:27017", mg.config.Mongo.User, mg.config.Mongo.Password, mg.config.Mongo.Host)

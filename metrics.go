@@ -10,7 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// observeLatency mierzy czas operacji i wywołuje odpowiedni histogram
 func observeLatency(m *metrics, op string, start time.Time) {
        elapsed := time.Since(start).Seconds()
        switch op {
