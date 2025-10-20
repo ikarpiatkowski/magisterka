@@ -1,5 +1,5 @@
 global:
-  scrape_interval: 15s
+  scrape_interval: 10s
   evaluation_interval: 30s
 
 scrape_configs:
@@ -10,13 +10,13 @@ scrape_configs:
   - job_name: "mongodb"
     static_configs:
       - targets: ["mongodb-exporter:9216"]
-    scrape_interval: 15s
+    scrape_interval: 10s
     metrics_path: /metrics
 
   - job_name: "postgresql"
     static_configs:
       - targets: ["postgresql-exporter:9187"]
-    scrape_interval: 15s
+    scrape_interval: 10s
     metrics_path: /metrics
     relabel_configs:
       - source_labels: [__address__]
@@ -29,17 +29,17 @@ scrape_configs:
   - job_name: "elasticsearch"
     static_configs:
       - targets: ["elasticsearch-exporter:9114"]
-    scrape_interval: 15s
+    scrape_interval: 10s
     metrics_path: /metrics
 
   - job_name: "cadvisor"
     static_configs:
       - targets: ["cadvisor:8080"]
-    scrape_interval: 15s
+    scrape_interval: 10s
     metrics_path: /metrics
 
   - job_name: "go-client"
     static_configs:
       - targets: ["go-client:8081", "go-client:8082", "go-client:8083"]
-    scrape_interval: 15s
+    scrape_interval: 10s
     metrics_path: /metrics
