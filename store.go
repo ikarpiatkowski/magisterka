@@ -24,17 +24,8 @@ type product struct {
 }
 
 func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics) (err error) {
-	now := time.Now()
-	defer func() {
-		switch db {
-		case "pg":
-			m.createLatency.Observe(time.Since(now).Seconds())
-		case "mg":
-			m.createLatency.Observe(time.Since(now).Seconds())
-		case "es":
-			m.createLatency.Observe(time.Since(now).Seconds())
-		}
-	}()
+       now := time.Now()
+       defer observeLatency(m, "create", now)
 
 	switch db {
 	case "pg":
@@ -58,42 +49,44 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		if err != nil {
 			return fmt.Errorf("json.Marshal failed: %w", err)
 		}
-		// Use Index API; if p.ElasticsearchId is empty, ES will generate an id.
+		// Use bulk enqueue to reduce number of requests
 		if p.ElasticsearchId == "" {
-			res, err := es.client.Index(
-				es.Cfg.IndexName,
-				bytes.NewReader(b),
-				es.client.Index.WithContext(es.context),
-			)
+			// no id provided - index auto-id
+			if id, err := es.EnqueueBulk("index", es.Cfg.IndexName, "", b); err != nil {
+				// fallback: synchronous single index
+				res, err := es.client.Index(es.Cfg.IndexName, bytes.NewReader(b), es.client.Index.WithContext(es.context))
+				if err != nil {
+					return fmt.Errorf("index failed after bulk fallback: %w", err)
+				}
+				defer res.Body.Close()
+				if res.IsError() {
+					return fmt.Errorf("error indexing document: %s", res.String())
+				}
+				var r map[string]interface{}
+				if err := json.NewDecoder(res.Body).Decode(&r); err == nil {
+					if id2, ok := r["_id"].(string); ok {
+						p.ElasticsearchId = id2
+					}
+				}
+				return nil
+			} else {
+				if id != "" {
+					p.ElasticsearchId = id
+				}
+				return nil
+			}
+		}
+		if _, err := es.EnqueueBulk("index", es.Cfg.IndexName, p.ElasticsearchId, b); err != nil {
+			// fallback to immediate index
+			res, err := es.client.Index(es.Cfg.IndexName, bytes.NewReader(b), es.client.Index.WithDocumentID(p.ElasticsearchId), es.client.Index.WithContext(es.context))
 			if err != nil {
-				return fmt.Errorf("Index failed: %w", err)
+				return fmt.Errorf("index failed after bulk fallback: %w", err)
 			}
 			defer res.Body.Close()
 			if res.IsError() {
 				return fmt.Errorf("error indexing document: %s", res.String())
 			}
-			var r map[string]interface{}
-			if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-				return fmt.Errorf("error parsing the response body: %s", err)
-			}
-			if id, ok := r["_id"].(string); ok {
-				p.ElasticsearchId = id
-			}
 			return nil
-		}
-		// If ID present, index with that ID (upsert semantics)
-		res, err := es.client.Index(
-			es.Cfg.IndexName,
-			bytes.NewReader(b),
-			es.client.Index.WithDocumentID(p.ElasticsearchId),
-			es.client.Index.WithContext(es.context),
-		)
-		if err != nil {
-			return fmt.Errorf("Index failed: %w", err)
-		}
-		defer res.Body.Close()
-		if res.IsError() {
-			return fmt.Errorf("error indexing document: %s", res.String())
 		}
 		return nil
 	}
@@ -101,17 +94,8 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 }
 
 func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics) (err error) {
-	now := time.Now()
-	defer func() {
-		switch db {
-		case "pg":
-			m.updateLatency.Observe(time.Since(now).Seconds())
-		case "mg":
-			m.updateLatency.Observe(time.Since(now).Seconds())
-		case "es":
-			m.updateLatency.Observe(time.Since(now).Seconds())
-		}
-	}()
+       now := time.Now()
+       defer observeLatency(m, "update", now)
 
 	switch db {
 	case "pg":
@@ -133,19 +117,17 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		if err := json.NewEncoder(&buf).Encode(doc); err != nil {
 			return fmt.Errorf("error encoding update doc: %w", err)
 		}
-		res, err := es.client.Update(
-			es.Cfg.IndexName,
-			p.ElasticsearchId,
-			&buf,
-			es.client.Update.WithContext(es.context),
-			es.client.Update.WithRefresh("false"),
-		)
-		if err != nil {
-			return fmt.Errorf("Index (update) failed: %w", err)
-		}
-		defer res.Body.Close()
-		if res.IsError() {
-			return fmt.Errorf("error updating document: %s", res.String())
+		// Enqueue update using bulk API
+		if _, err := es.EnqueueBulk("update", es.Cfg.IndexName, p.ElasticsearchId, buf.Bytes()); err != nil {
+			// fallback to single update
+			res, err := es.client.Update(es.Cfg.IndexName, p.ElasticsearchId, &buf, es.client.Update.WithContext(es.context), es.client.Update.WithRefresh("false"))
+			if err != nil {
+				return fmt.Errorf("index (update) failed after bulk fallback: %w", err)
+			}
+			defer res.Body.Close()
+			if res.IsError() {
+				return fmt.Errorf("error updating document: %s", res.String())
+			}
 		}
 		return nil
 	}
@@ -153,17 +135,8 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 }
 
 func (p *product) search(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics, debug bool) (err error) {
-	now := time.Now()
-	defer func() {
-		switch db {
-		case "pg":
-			m.searchLatency.Observe(time.Since(now).Seconds())
-		case "mg":
-			m.searchLatency.Observe(time.Since(now).Seconds())
-		case "es":
-			m.searchLatency.Observe(time.Since(now).Seconds())
-		}
-	}()
+       now := time.Now()
+       defer observeLatency(m, "search", now)
 
 	switch db {
 	case "pg":
@@ -220,17 +193,8 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 }
 
 func (p *product) delete(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics) (err error) {
-	now := time.Now()
-	defer func() {
-		switch db {
-		case "pg":
-			m.deleteLatency.Observe(time.Since(now).Seconds())
-		case "mg":
-			m.deleteLatency.Observe(time.Since(now).Seconds())
-		case "es":
-			m.deleteLatency.Observe(time.Since(now).Seconds())
-		}
-	}()
+       now := time.Now()
+       defer observeLatency(m, "delete", now)
 
 	switch db {
 	case "pg":
@@ -245,18 +209,17 @@ func (p *product) delete(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
 		_, err = mg.db.Collection("product").DeleteOne(mg.context, filter)
 		return annotate(err, "DeleteOne failed")
 	case "es":
-		res, err := es.client.Delete(
-			es.Cfg.IndexName,
-			p.ElasticsearchId,
-			es.client.Delete.WithContext(es.context),
-			es.client.Delete.WithRefresh("false"),
-		)
-		if err != nil {
-			return fmt.Errorf("Delete failed: %w", err)
-		}
-		defer res.Body.Close()
-		if res.IsError() {
-			return fmt.Errorf("error deleting document: %s", res.String())
+		// Enqueue delete using bulk API
+		if _, err := es.EnqueueBulk("delete", es.Cfg.IndexName, p.ElasticsearchId, nil); err != nil {
+			// fallback to single delete
+			res, err := es.client.Delete(es.Cfg.IndexName, p.ElasticsearchId, es.client.Delete.WithContext(es.context), es.client.Delete.WithRefresh("false"))
+			if err != nil {
+				return fmt.Errorf("delete failed after bulk fallback: %w", err)
+			}
+			defer res.Body.Close()
+			if res.IsError() {
+				return fmt.Errorf("error deleting document: %s", res.String())
+			}
 		}
 		return nil
 	}

@@ -70,7 +70,7 @@ services:
     environment:
       DATA_SOURCE_NAME: "postgresql://admin:password123@postgresql:5432/testdb?sslmode=disable"
     command:
-      - "--log.level=info"
+      - "--log.level=warn"
       - "--web.listen-address=:9187"
     depends_on:
       - postgresql
@@ -91,7 +91,7 @@ services:
       retries: 3
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    image: docker.elastic.co/elasticsearch/elasticsearch:latest
     container_name: elasticsearch
     restart: unless-stopped
     ports:
@@ -113,6 +113,7 @@ services:
       - "9114:9114"
     command:
       - "--es.uri=http://elasticsearch:9200"
+      - "--log.level=warn"
     depends_on:
       - elasticsearch
     networks:
@@ -171,7 +172,7 @@ services:
       - monitoring
 
   go-client:
-    build: ./client
+    build: ./
     container_name: go-client
     restart: unless-stopped
     ports:

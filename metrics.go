@@ -4,10 +4,26 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+// observeLatency mierzy czas operacji i wywołuje odpowiedni histogram
+func observeLatency(m *metrics, op string, start time.Time) {
+       elapsed := time.Since(start).Seconds()
+       switch op {
+       case "create":
+	       m.createLatency.Observe(elapsed)
+       case "update":
+	       m.updateLatency.Observe(elapsed)
+       case "search":
+	       m.searchLatency.Observe(elapsed)
+       case "delete":
+	       m.deleteLatency.Observe(elapsed)
+       }
+}
 
 var buckets = []float64{
 	0.00001, 0.000025, 0.00005, 0.000075, // < 100 mikrosekund
@@ -34,7 +50,6 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 	createLatencyHelp := "Latency of create operations in seconds."
 	createErrorsHelp := "Total number of create errors."
 
-	// For ES use generic create help (per-op CRUD)
 	if dbLabel == "es" {
 		createLatencyHelp = "Latency of create (index) operations in seconds."
 		createErrorsHelp = "Total number of create (index) errors."
@@ -49,7 +64,7 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 		}),
 		createLatency: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace:   "client",
-			Name:        "create_latency_seconds", // Nazwa zostaje, ale 'Help' się zmienia
+			Name:        "create_latency_seconds",
 			Help:        createLatencyHelp,
 			Buckets:     buckets,
 			ConstLabels: prometheus.Labels{"db": dbLabel},
@@ -77,7 +92,7 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 		}),
 		createErrorsTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace:   "client",
-			Name:        "create_errors_total", // Nazwa zostaje
+			Name:        "create_errors_total",
 			Help:        createErrorsHelp,
 			ConstLabels: prometheus.Labels{"db": dbLabel},
 		}),
