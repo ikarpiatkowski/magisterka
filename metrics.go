@@ -43,6 +43,7 @@ type metrics struct {
 	updateErrorsTotal prometheus.Counter
 	searchErrorsTotal prometheus.Counter
 	deleteErrorsTotal prometheus.Counter
+	esFlushLatency    prometheus.Histogram
 }
 
 func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
@@ -114,11 +115,28 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
 			ConstLabels: prometheus.Labels{"db": dbLabel},
 		}),
 	}
+	m.esFlushLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace:   "client",
+		Name:        "es_flush_latency_seconds",
+		Help:        "Latency from ES bulk request send to ack (per-bulk flush)",
+		Buckets:     buckets,
+		ConstLabels: prometheus.Labels{"db": dbLabel},
+	})
+
 	reg.MustRegister(
 		m.clients, m.createLatency, m.updateLatency, m.searchLatency, m.deleteLatency,
 		m.createErrorsTotal, m.updateErrorsTotal, m.searchErrorsTotal, m.deleteErrorsTotal,
+		m.esFlushLatency,
 	)
 	return m
+}
+
+// observeEsFlushLatency records the seconds between bulk send and bulk response
+func (m *metrics) observeEsFlushLatency(seconds float64) {
+	if m == nil {
+		return
+	}
+	m.esFlushLatency.Observe(seconds)
 }
 
 func StartPrometheusServer(port int, reg *prometheus.Registry) {

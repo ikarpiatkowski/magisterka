@@ -165,6 +165,8 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 
 	ctx, cancel := context.WithTimeout(es.context, 15*time.Second)
 	defer cancel()
+	// time the network call (true ES flush time)
+	flushStart := time.Now()
 	res, err := es.client.Bulk(bytes.NewReader(buf.Bytes()), es.client.Bulk.WithContext(ctx))
 	if err != nil {
 		slog.Warn("bulk request failed", "error", err)
@@ -215,6 +217,10 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 		}
 		if it.done != nil {
 			it.done <- bulkResult{id: gotID, err: resultErr}
+		}
+		// observe per-flush latency for successful items
+		if resultErr == nil && es.m != nil {
+			es.m.observeEsFlushLatency(time.Since(flushStart).Seconds())
 		}
 		if it.op == "index" && resultErr == nil && gotID != "" {
 			es.pendingMu.Lock()
