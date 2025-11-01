@@ -10,14 +10,6 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
-    devices:
-      - /dev/kmsg
-    privileged: true
-    command:
-      - "/usr/bin/cadvisor"
-      - "-logtostderr"
-      - "--storage_driver_ignore=btrfs"
     networks:
       - monitoring
 
@@ -62,7 +54,6 @@ services:
       - "9216:9216"
     command:
       - "--mongodb.uri=mongodb://admin:password123@mongodb:27017/admin"
-      - "--compatible-mode=false"
       - "--collect-all"
     depends_on:
       - mongodb
@@ -77,26 +68,10 @@ services:
       - "9187:9187"
     environment:
       DATA_SOURCE_NAME: "postgresql://admin:password123@postgresql:5432/testdb?sslmode=disable"
-    command:
-      - "--log.level=warn"
-      - "--web.listen-address=:9187"
     depends_on:
       - postgresql
     networks:
       - monitoring
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:9187/metrics",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.1.5
@@ -121,24 +96,10 @@ services:
       - "9114:9114"
     command:
       - "--es.uri=http://elasticsearch:9200"
-      - "--log.level=warn"
     depends_on:
       - elasticsearch
     networks:
       - monitoring
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:9114/metrics",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   prometheus:
     image: prom/prometheus:latest
@@ -149,13 +110,6 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.console.libraries=/etc/prometheus/console_libraries"
-      - "--web.console.templates=/etc/prometheus/consoles"
-      - "--web.enable-lifecycle"
-      - "--web.enable-admin-api"
     depends_on:
       - mongodb-exporter
       - postgresql-exporter
@@ -171,7 +125,6 @@ services:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin123
-      GF_USERS_ALLOW_SIGN_UP: false
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:

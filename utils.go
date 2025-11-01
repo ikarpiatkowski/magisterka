@@ -11,13 +11,6 @@ func random(min int, max int) int {
 	return rand.Intn(max-min) + min
 }
 
-func annotate(err error, format string, args ...any) error {
-	if err != nil {
-		return fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), err)
-	}
-	return nil
-}
-
 func fail(err error, format string, args ...any) {
 	if err != nil {
 		slog.Error(fmt.Sprintf("%s: %s", fmt.Sprintf(format, args...), err))

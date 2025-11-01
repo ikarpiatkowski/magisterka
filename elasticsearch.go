@@ -207,7 +207,7 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 		       it.done <- bulkResult{id: gotID, err: resultErr}
 	       }
 	       if resultErr == nil && es.m != nil {
-		       es.m.observeEsFlushLatency(time.Since(flushStart).Seconds())
+		       es.m.crudLatency.WithLabelValues(it.op).Observe(time.Since(flushStart).Seconds())
 	       }
 	       if it.op == "index" && resultErr == nil && gotID != "" {
 		       es.pendingMu.Lock()
