@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"log/slog"
-
 	es9 "github.com/elastic/go-elasticsearch/v9"
 )
 
@@ -62,9 +60,9 @@ func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elasticsearc
 		context:     ctx,
 		Cfg:         &c.Elasticsearch,
 		m:           m,
-		bulkCh:      make(chan *bulkItem, 2000),
-		bulkSize:    500,
-		bulkTimeout: 1 * time.Millisecond,
+			   bulkCh:      make(chan *bulkItem, 3000),
+			   bulkSize:    500,
+			   bulkTimeout: 1 * time.Millisecond,
 		pending:     make(map[string]chan struct{}),
 	}
 
@@ -74,64 +72,58 @@ func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elasticsearc
 		es.runBulkProcessor()
 	}()
 
-	var lastErr error
-	for i := 0; i < 10; i++ {
-		res, err := client.Info(client.Info.WithContext(ctx))
-		if res != nil && res.Body != nil {
-			res.Body.Close()
-		}
-		if err == nil && res != nil && res.StatusCode >= 200 && res.StatusCode < 300 {
-			return es, nil
-		}
-		lastErr = err
-		slog.Warn("Elasticsearch connection ping failed, retrying...", "error", err)
-		time.Sleep(2 * time.Second)
-	}
-
-	close(es.bulkCh)
-	es.bulkWG.Wait()
-
-	return nil, fmt.Errorf("elasticsearch connection failed after retries: %w", lastErr)
+       var lastErr error
+       for i := 0; i < 10; i++ {
+	       res, err := client.Info(client.Info.WithContext(ctx))
+	       if res != nil && res.Body != nil {
+		       res.Body.Close()
+	       }
+	       if err == nil && res != nil && res.StatusCode >= 200 && res.StatusCode < 300 {
+		       return es, nil
+	       }
+	       lastErr = err
+	       time.Sleep(2 * time.Second)
+       }
+       close(es.bulkCh)
+       es.bulkWG.Wait()
+       return nil, lastErr
 }
 
 func (es *elasticsearchStore) runBulkProcessor() {
 	var batch []*bulkItem
 	timer := time.NewTimer(es.bulkTimeout)
 	defer timer.Stop()
-	flush := func(items []*bulkItem) {
-		if len(items) == 0 {
-			return
-		}
-		es.flushBulk(items)
-	}
-
-	for {
-		select {
-		case it, ok := <-es.bulkCh:
-			if !ok {
-				flush(batch)
-				return
-			}
-			batch = append(batch, it)
-			if len(batch) >= es.bulkSize {
-				flush(batch)
-				batch = nil
-				if !timer.Stop() {
-					<-timer.C
-				}
-				timer.Reset(es.bulkTimeout)
-			}
-		case <-timer.C:
-			if len(batch) > 0 {
-				flush(batch)
-				batch = nil
-			}
-			timer.Reset(es.bulkTimeout)
-		case <-es.context.Done():
-			flush(batch)
-			return
-		}
-	}
+       for {
+	       select {
+	       case it, ok := <-es.bulkCh:
+		       if !ok {
+			       if len(batch) > 0 {
+				       es.flushBulk(batch)
+			       }
+			       return
+		       }
+		       batch = append(batch, it)
+		       if len(batch) >= es.bulkSize {
+			       es.flushBulk(batch)
+			       batch = nil
+			       if !timer.Stop() {
+				       <-timer.C
+			       }
+			       timer.Reset(es.bulkTimeout)
+		       }
+	       case <-timer.C:
+		       if len(batch) > 0 {
+			       es.flushBulk(batch)
+			       batch = nil
+		       }
+		       timer.Reset(es.bulkTimeout)
+	       case <-es.context.Done():
+		       if len(batch) > 0 {
+			       es.flushBulk(batch)
+		       }
+		       return
+	       }
+       }
 }
 
 func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
@@ -167,70 +159,65 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
 	defer cancel()
 	// time the network call (true ES flush time)
 	flushStart := time.Now()
-	res, err := es.client.Bulk(bytes.NewReader(buf.Bytes()), es.client.Bulk.WithContext(ctx))
-	if err != nil {
-		slog.Warn("bulk request failed", "error", err)
-		for _, it := range items {
-			if it.done != nil {
-				it.done <- bulkResult{err: err}
-			}
-		}
-		return
-	}
-	defer res.Body.Close()
-	var resp map[string]interface{}
-	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		slog.Warn("failed to decode bulk response", "error", err)
-		for _, it := range items {
-			if it.done != nil {
-				it.done <- bulkResult{err: fmt.Errorf("failed to decode bulk response: %w", err)}
-			}
-		}
-		return
-	}
+       res, err := es.client.Bulk(bytes.NewReader(buf.Bytes()), es.client.Bulk.WithContext(ctx))
+       if err != nil {
+	       for _, it := range items {
+		       if it.done != nil {
+			       it.done <- bulkResult{err: err}
+		       }
+	       }
+	       return
+       }
+       defer res.Body.Close()
+       var resp map[string]interface{}
+       if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+	       for _, it := range items {
+		       if it.done != nil {
+			       it.done <- bulkResult{err: err}
+		       }
+	       }
+	       return
+       }
 
-	itms, _ := resp["items"].([]interface{})
-	for i, it := range items {
-		var resultErr error
-		var gotID string
-		if i < len(itms) {
-			if entry, ok := itms[i].(map[string]interface{}); ok {
-				for _, v := range entry {
-					if m, ok := v.(map[string]interface{}); ok {
-						if sid, ok := m["_id"].(string); ok {
-							gotID = sid
-						}
-						if e, ok := m["error"]; ok {
-							resultErr = fmt.Errorf("bulk item error: %v", e)
-						}
-						if statusF, ok := m["status"].(float64); ok {
-							status := int(statusF)
-							if status >= 400 {
-								if resultErr == nil {
-									resultErr = fmt.Errorf("bulk item failed with status %d", status)
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		if it.done != nil {
-			it.done <- bulkResult{id: gotID, err: resultErr}
-		}
-		// observe per-flush latency for successful items
-		if resultErr == nil && es.m != nil {
-			es.m.observeEsFlushLatency(time.Since(flushStart).Seconds())
-		}
-		if it.op == "index" && resultErr == nil && gotID != "" {
-			es.pendingMu.Lock()
-			if ch, ok := es.pending[gotID]; ok {
-				close(ch)
-				delete(es.pending, gotID)
-			}
-			es.pendingMu.Unlock()
-		}
-	}
+       itms, _ := resp["items"].([]interface{})
+       for i, it := range items {
+	       var resultErr error
+	       var gotID string
+	       if i < len(itms) {
+		       if entry, ok := itms[i].(map[string]interface{}); ok {
+			       for _, v := range entry {
+				       if m, ok := v.(map[string]interface{}); ok {
+					       if sid, ok := m["_id"].(string); ok {
+						       gotID = sid
+					       }
+					       if e, ok := m["error"]; ok {
+						       resultErr = fmt.Errorf("bulk item error: %v", e)
+					       }
+					       if statusF, ok := m["status"].(float64); ok {
+						       status := int(statusF)
+						       if status >= 400 && resultErr == nil {
+							       resultErr = fmt.Errorf("bulk item failed with status %d", status)
+						       }
+					       }
+				       }
+			       }
+		       }
+	       }
+	       if it.done != nil {
+		       it.done <- bulkResult{id: gotID, err: resultErr}
+	       }
+	       if resultErr == nil && es.m != nil {
+		       es.m.observeEsFlushLatency(time.Since(flushStart).Seconds())
+	       }
+	       if it.op == "index" && resultErr == nil && gotID != "" {
+		       es.pendingMu.Lock()
+		       if ch, ok := es.pending[gotID]; ok {
+			       close(ch)
+			       delete(es.pending, gotID)
+		       }
+		       es.pendingMu.Unlock()
+	       }
+       }
 }
 
 func (es *elasticsearchStore) EnqueueBulk(op, index, id string, body []byte) (string, error) {
