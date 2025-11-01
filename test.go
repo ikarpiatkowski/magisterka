@@ -24,7 +24,7 @@ func runTest(cfg *Config, dbType string, m *metrics) {
 
        sleepInterval := time.Duration(cfg.Test.RequestDelayMs) * time.Millisecond
        for currentClients := cfg.Test.MinClients; currentClients <= cfg.Test.MaxClients; currentClients++ {
-	       m.clients.Set(float64(currentClients))
+	       m.clients.WithLabelValues(dbType, "stage").Set(float64(currentClients))
 	       stageCtx, cancelStage := context.WithCancel(ctx)
 	       var stageWG sync.WaitGroup
 	       for i := 0; i < currentClients; i++ {
