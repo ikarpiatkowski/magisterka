@@ -28,7 +28,7 @@ services:
       - monitoring
 
   postgresql:
-    image: postgres:latest
+    image: postgres:18
     container_name: postgresql
     restart: unless-stopped
     ports:

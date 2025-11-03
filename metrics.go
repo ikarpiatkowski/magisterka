@@ -76,8 +76,6 @@ func NewMetrics(reg prometheus.Registerer, dbLabel string) *metrics {
        return m
 }
 
-// REMOVED: observeEsFlushLatency
-
 func StartPrometheusServer(port int, reg *prometheus.Registry) {
        go func() {
 	       mux := http.NewServeMux()
