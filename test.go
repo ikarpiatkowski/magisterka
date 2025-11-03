@@ -12,7 +12,7 @@ func runTest(cfg *Config, dbType string, m *metrics) {
 
        var pg *postgres
        var mg *mongodb
-       var es *elasticsearchStore
+       var es *elastic
        switch dbType {
        case "pg":
 	       pg = NewPostgres(cfg)

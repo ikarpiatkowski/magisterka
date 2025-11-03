@@ -16,7 +16,7 @@ func genLocalID() string {
 	return fmt.Sprintf("local-%d", time.Now().UnixNano())
 }
 
-type elasticsearchStore struct {
+type elastic struct {
 	client  *es9.Client
 	context context.Context
 	Cfg     *ElasticsearchConfig
@@ -42,7 +42,7 @@ type bulkResult struct {
 	err error
 }
 
-func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elasticsearchStore, error) {
+func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elastic, error) {
 	addr := c.Elasticsearch.Host
 	if !strings.HasPrefix(addr, "http://") && !strings.HasPrefix(addr, "https://") {
 		addr = fmt.Sprintf("http://%s", addr)
@@ -55,7 +55,7 @@ func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elasticsearc
 		return nil, fmt.Errorf("unable to create es client: %w", err)
 	}
 
-	es := &elasticsearchStore{
+	es := &elastic{
 		client:      client,
 		context:     ctx,
 		Cfg:         &c.Elasticsearch,
@@ -89,7 +89,7 @@ func NewElasticsearch(ctx context.Context, c *Config, m *metrics) (*elasticsearc
        return nil, lastErr
 }
 
-func (es *elasticsearchStore) runBulkProcessor() {
+func (es *elastic) runBulkProcessor() {
 	var batch []*bulkItem
 	timer := time.NewTimer(es.bulkTimeout)
 	defer timer.Stop()
@@ -126,7 +126,7 @@ func (es *elasticsearchStore) runBulkProcessor() {
        }
 }
 
-func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
+func (es *elastic) flushBulk(items []*bulkItem) {
 	var buf bytes.Buffer
 	for _, it := range items {
 		switch it.op {
@@ -220,7 +220,7 @@ func (es *elasticsearchStore) flushBulk(items []*bulkItem) {
        }
 }
 
-func (es *elasticsearchStore) EnqueueBulk(op, index, id string, body []byte) (string, error) {
+func (es *elastic) EnqueueBulk(op, index, id string, body []byte) (string, error) {
 	if op == "index" && id == "" {
 		id = genLocalID()
 	}
@@ -251,7 +251,7 @@ func (es *elasticsearchStore) EnqueueBulk(op, index, id string, body []byte) (st
 		}
 }
 
-func (es *elasticsearchStore) WaitForIndex(id string, timeout time.Duration) bool {
+func (es *elastic) WaitForIndex(id string, timeout time.Duration) bool {
 	es.pendingMu.Lock()
 	ch, ok := es.pending[id]
 	es.pendingMu.Unlock()

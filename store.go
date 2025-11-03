@@ -22,7 +22,7 @@ type product struct {
 	Colors          []string `bson:"colors,omitempty" json:"colors,omitempty"`
 }
 
-func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics) error {
+func (p *product) create(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
        defer observeLatency(m, "create", time.Now())
        switch db {
        case "pg":
@@ -69,7 +69,7 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
        return nil
 }
 
-func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics) error {
+func (p *product) update(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
        defer observeLatency(m, "update", time.Now())
        switch db {
        case "pg":
@@ -105,11 +105,12 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
        return nil
 }
 
-func (p *product) search(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics, debug bool) error {
+func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics, debug bool) error {
        defer observeLatency(m, "search", time.Now())
        switch db {
        case "pg":
-	       rows, err := pg.dbpool.Query(pg.context, `SELECT id, jdoc->'price' as price, jdoc->'stock' as stock FROM product WHERE (jdoc -> 'price')::numeric < $1 LIMIT 5`, 30)
+	       rows, err := pg.dbpool.Query(pg.context, `SELECT id, jdoc->'price' as price, jdoc->'stock' as stock FROM 
+		   											product WHERE (jdoc -> 'price')::numeric < $1 LIMIT 5`, 30)
 	       if err == nil {
 		       defer rows.Close()
 		       if debug {
@@ -155,7 +156,7 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elasticsearchStore, db s
        return nil
 }
 
-func (p *product) delete(pg *postgres, mg *mongodb, es *elasticsearchStore, db string, m *metrics) error {
+func (p *product) delete(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
        defer observeLatency(m, "delete", time.Now())
        switch db {
        case "pg":
