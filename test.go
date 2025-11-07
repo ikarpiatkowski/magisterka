@@ -37,7 +37,7 @@ func runTest(cfg *Config, dbType string, m *metrics) {
 					       return
 				       default:
 				       }
-				       p := product{
+				       p := project{
 					       Name:        genString(20),
 					       Description: genString(100),
 					       Price:       float32(random(1, 100)),
