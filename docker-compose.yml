@@ -21,14 +21,14 @@ services:
       - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: ikarikar
+      MONGO_INITDB_ROOT_PASSWORD: password123
     volumes:
       - mongodb_data:/data/db
     networks:
       - monitoring
 
   postgresql:
-    image: postgres:latest
+    image: postgres:18
     container_name: postgresql
     restart: unless-stopped
     ports:
@@ -36,15 +36,13 @@ services:
     environment:
       POSTGRES_DB: testdb
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: ikarikar
+      POSTGRES_PASSWORD: password123
     volumes:
       - postgresql_data:/var/lib/postgresql/data
     command:
       - "postgres"
       - "-c"
       - "synchronous_commit=off"
-      - "-c"
-      - "wal_writer_delay=100ms"
     networks:
       - monitoring
 
@@ -55,7 +53,7 @@ services:
     ports:
       - "9216:9216"
     command:
-      - "--mongodb.uri=mongodb://admin:ikarikar@mongodb:27017/admin"
+      - "--mongodb.uri=mongodb://admin:password123@mongodb:27017/admin"
       - "--collect-all"
     depends_on:
       - mongodb
@@ -69,7 +67,7 @@ services:
     ports:
       - "9187:9187"
     environment:
-      DATA_SOURCE_NAME: "postgresql://admin:ikarikar@postgresql:5432/testdb?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://admin:password123@postgresql:5432/testdb?sslmode=disable"
     depends_on:
       - postgresql
     networks:
