@@ -37,8 +37,10 @@ services:
       POSTGRES_DB: testdb
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password123
+    # For Postgres 18+ the recommended single mount point is /var/lib/postgresql
+    # so the image can put versioned data under a subdirectory and support pg_upgrade
     volumes:
-      - postgresql_data:/var/lib/postgresql/data
+      - postgresql_data:/var/lib/postgresql
     command:
       - "postgres"
       - "-c"
