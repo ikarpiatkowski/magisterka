@@ -15,51 +15,70 @@ func runTest(cfg *Config, dbType string, m *metrics) {
        var es *elastic
        switch dbType {
        case "pg":
-	       pg = NewPostgres(cfg)
+           pg = NewPostgres(cfg)
        case "mg":
-	       mg = NewMongo(cfg)
+           mg = NewMongo(cfg)
        case "es":
-	       es, _ = NewElasticsearch(ctx, cfg, m)
+           es, _ = NewElasticsearch(ctx, cfg, m)
        }
 
        sleepInterval := time.Duration(cfg.Test.RequestDelayMs) * time.Millisecond
        for currentClients := cfg.Test.MinClients; currentClients <= cfg.Test.MaxClients; currentClients++ {
-	       m.clients.WithLabelValues(dbType, "stage").Set(float64(currentClients))
-	       stageCtx, cancelStage := context.WithCancel(ctx)
-	       var stageWG sync.WaitGroup
-	       for i := 0; i < currentClients; i++ {
-		       stageWG.Add(1)
-		       go func() {
-			       defer stageWG.Done()
-			       for {
-				       select {
-				       case <-stageCtx.Done():
-					       return
-				       default:
-				       }
-				       p := product{
-					       Name:        genString(20),
-					       Description: genString(100),
-					       Price:       float32(random(1, 100)),
-					       Stock:       100,
-					       Colors:      []string{genString(5), genString(5)},
-				       }
-				       _ = p.create(pg, mg, es, dbType, m)
-				       p.Stock = random(1, 100)
-				       _ = p.update(pg, mg, es, dbType, m)
-				       _ = p.search(pg, mg, es, dbType, m, cfg.Debug)
-				       _ = p.delete(pg, mg, es, dbType, m)
-				       if sleepInterval > 0 {
-					       select {
-					       case <-time.After(sleepInterval):
-					       case <-stageCtx.Done():
-					       }
-				       }
-			       }
-		       }()
-	       }
-	       time.Sleep(time.Duration(cfg.Test.StageIntervalS) * time.Second)
-	       cancelStage()
-	       stageWG.Wait()
+           m.clients.WithLabelValues(dbType, "stage").Set(float64(currentClients))
+           stageCtx, cancelStage := context.WithCancel(ctx)
+           var stageWG sync.WaitGroup
+           for i := 0; i < currentClients; i++ {
+               stageWG.Add(1)
+               go func() {
+                   defer stageWG.Done()
+                   for {
+                       select {
+                       case <-stageCtx.Done():
+                           return
+                       default:
+                       }
+
+                       // tworzymy dwa produkty: p1 i p2
+                       p1 := product{
+                           Name:        genString(20),
+                           Description: genString(100),
+                           Price:       float32(random(1, 100)),
+                           Stock:       100,
+                           Colors:      []string{genString(5), genString(5)},
+                       }
+                       p2 := product{
+                           Name:        genString(20),
+                           Description: genString(100),
+                           Price:       float32(random(1, 100)),
+                           Stock:       100,
+                           Colors:      []string{genString(5), genString(5)},
+                       }
+
+                       // create both
+                       _ = p1.create(pg, mg, es, dbType, m)
+                       _ = p2.create(pg, mg, es, dbType, m)
+
+                       // update only p1
+                       p1.Stock = random(1, 100)
+                       _ = p1.update(pg, mg, es, dbType, m)
+
+                       // read/search (unchanged)
+                       _ = p1.search(pg, mg, es, dbType, m, cfg.Debug)
+
+                       // delete only p2 (net +1 per cycle)
+                       _ = p2.delete(pg, mg, es, dbType, m)
+
+                       if sleepInterval > 0 {
+                           select {
+                           case <-time.After(sleepInterval):
+                           case <-stageCtx.Done():
+                           }
+                       }
+                   }
+               }()
+           }
+           time.Sleep(time.Duration(cfg.Test.StageIntervalS) * time.Second)
+           cancelStage()
+           stageWG.Wait()
        }
 }
