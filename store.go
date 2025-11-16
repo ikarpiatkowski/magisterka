@@ -2,12 +2,12 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type product struct {
@@ -109,49 +109,71 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        defer observeLatency(m, "search", time.Now())
        switch db {
        case "pg":
-	       rows, err := pg.dbpool.Query(pg.context, `SELECT id, jdoc->'price' as price, jdoc->'stock' as stock FROM 
-		   											product WHERE (jdoc -> 'price')::numeric < $1 LIMIT 5`, 30)
-	       if err == nil {
-		       defer rows.Close()
-		       if debug {
-			       for rows.Next() {}
-		       }
+	       // compute avg over a limited subquery (limit 100)
+	       var avg sql.NullFloat64
+	       err := pg.dbpool.QueryRow(pg.context, `SELECT AVG(price) FROM (SELECT (jdoc ->> 'price')::numeric as price FROM product WHERE (jdoc ->> 'price')::numeric < $1 LIMIT 100) as limited_products`, 30).Scan(&avg)
+	       if err != nil && err != sql.ErrNoRows {
+		       return err
 	       }
-	       return err
+	       _ = avg
+	       return nil
        case "mg":
-	       filter := bson.M{"price": bson.M{"$lt": 30}}
-	       opts := options.Find().SetLimit(5)
-	       cursor, err := mg.db.Collection("product").Find(mg.context, filter, opts)
-	       if err == nil {
-		       defer cursor.Close(mg.context)
-		       if debug {
-			       var results []product
-			       cursor.All(mg.context, &results)
+	       // aggregation that converts price to double, filters, limits 100, then computes avg
+	       // Match -> Limit -> Group: compute average over first 100 matching documents.
+	       // Assumes `price` is stored as a numeric type (int); Mongo $avg will return a double result.
+	       pipeline := []bson.M{
+		       {"$match": bson.M{"price": bson.M{"$lt": 30}}},
+		       {"$limit": 100},
+		       {"$group": bson.M{"_id": nil, "avg_price": bson.M{"$avg": "$price"}}},
+	       }
+	       cursor, err := mg.db.Collection("product").Aggregate(mg.context, pipeline)
+	       if err != nil {
+		       return err
+	       }
+	       defer cursor.Close(mg.context)
+	       var out struct{
+		       AvgPrice float64 `bson:"avg_price"`
+	       }
+	       if cursor.Next(mg.context) {
+		       if err := cursor.Decode(&out); err != nil {
+			       return err
 		       }
 	       }
-	       return err
+	       _ = out
+	       return nil
        case "es":
 	       var buf bytes.Buffer
 	       query := map[string]interface{}{
 		       "query": map[string]interface{}{
 			       "range": map[string]interface{}{"price": map[string]interface{}{"lt": 30}},
 		       },
-		       "size": 5,
+		       "size": 0,
+		       "aggs": map[string]interface{}{
+			       "avg_price": map[string]interface{}{"avg": map[string]interface{}{"field": "price"}},
+		       },
 	       }
-	       err := json.NewEncoder(&buf).Encode(query)
-	       if err != nil {
+	       if err := json.NewEncoder(&buf).Encode(query); err != nil {
 		       return err
 	       }
 	       res, err := es.client.Search(
 		       es.client.Search.WithContext(es.context),
 		       es.client.Search.WithIndex(es.Cfg.IndexName),
 		       es.client.Search.WithBody(&buf),
-		       es.client.Search.WithSize(5),
 	       )
-	       if err == nil {
-		       defer res.Body.Close()
+	       if err != nil {
+		       return err
 	       }
-	       return err
+	       defer res.Body.Close()
+	       var r map[string]interface{}
+	       if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+		       return err
+	       }
+	       if aggs, ok := r["aggregations"].(map[string]interface{}); ok {
+		       if ap, ok := aggs["avg_price"].(map[string]interface{}); ok {
+			       _ = ap["value"]
+		       }
+	       }
+	       return nil
        }
        return nil
 }

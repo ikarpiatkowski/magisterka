@@ -6,6 +6,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 type mongodb struct {
@@ -30,11 +31,15 @@ func (mg *mongodb) mgConnect() {
 	} else {
 		uri = fmt.Sprintf("mongodb://%s:27017", mg.config.Mongo.Host)
 	}
-
-	opts := options.Client().SetMaxPoolSize(mg.config.Mongo.MaxConnections)
+	// set write concern w=0 (fire-and-forget) on the client
+	// use convenience function Unacknowledged() (New and W are deprecated)
+	wc := writeconcern.Journaled()
+	opts := options.Client().SetMaxPoolSize(mg.config.Mongo.MaxConnections).SetWriteConcern(wc)
 
 	client, err := mongo.Connect(context.Background(), opts.ApplyURI(uri))
 	fail(err, "Unable to create connection pool")
 
-	mg.db = client.Database(mg.config.Mongo.Database)
+	// Also set the database-level write concern to w=0 for operations executed on mg.db
+	dbOpts := options.Database().SetWriteConcern(wc)
+	mg.db = client.Database(mg.config.Mongo.Database, dbOpts)
 }
