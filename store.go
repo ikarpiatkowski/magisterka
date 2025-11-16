@@ -105,22 +105,18 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        return nil
 }
 
-func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics, debug bool) error {
+func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
        defer observeLatency(m, "search", time.Now())
        switch db {
        case "pg":
-	       // compute avg over a limited subquery (limit 100)
 	       var avg sql.NullFloat64
-	       err := pg.dbpool.QueryRow(pg.context, `SELECT AVG(price) FROM (SELECT (jdoc ->> 'price')::numeric as price FROM product WHERE (jdoc ->> 'price')::numeric < $1 LIMIT 100) as limited_products`, 30).Scan(&avg)
+	       err := pg.dbpool.QueryRow(pg.context, `SELECT AVG(price) FROM (SELECT (jdoc -> 'price')::numeric as price FROM product WHERE (jdoc -> 'price')::numeric < $1 LIMIT 100) as limited_products`, 30).Scan(&avg)
 	       if err != nil && err != sql.ErrNoRows {
 		       return err
 	       }
 	       _ = avg
 	       return nil
        case "mg":
-	       // aggregation that converts price to double, filters, limits 100, then computes avg
-	       // Match -> Limit -> Group: compute average over first 100 matching documents.
-	       // Assumes `price` is stored as a numeric type (int); Mongo $avg will return a double result.
 	       pipeline := []bson.M{
 		       {"$match": bson.M{"price": bson.M{"$lt": 30}}},
 		       {"$limit": 100},

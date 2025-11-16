@@ -37,8 +37,6 @@ func runTest(cfg *Config, dbType string, m *metrics) {
                            return
                        default:
                        }
-
-                       // tworzymy dwa produkty: p1 i p2
                        p1 := product{
                            Name:        genString(20),
                            Description: genString(100),
@@ -54,18 +52,14 @@ func runTest(cfg *Config, dbType string, m *metrics) {
                            Colors:      []string{genString(5), genString(5)},
                        }
 
-                       // create both
                        _ = p1.create(pg, mg, es, dbType, m)
                        _ = p2.create(pg, mg, es, dbType, m)
 
-                       // update only p1
                        p1.Stock = random(1, 100)
                        _ = p1.update(pg, mg, es, dbType, m)
 
-                       // read/search (unchanged)
-                       _ = p1.search(pg, mg, es, dbType, m, cfg.Debug)
+                       _ = p1.search(pg, mg, es, dbType, m)
 
-                       // delete only p2 (net +1 per cycle)
                        _ = p2.delete(pg, mg, es, dbType, m)
 
                        if sleepInterval > 0 {
