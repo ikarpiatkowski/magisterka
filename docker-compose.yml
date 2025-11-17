@@ -44,7 +44,9 @@ services:
     command:
       - "postgres"
       - "-c"
-      - "synchronous_commit=on"
+      - "synchronous_commit=off"
+      - "-c"
+      - "wal_writer_delay=100ms"
     networks:
       - monitoring
 

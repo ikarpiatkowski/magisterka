@@ -110,7 +110,7 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        switch db {
        case "pg":
 	       var avg sql.NullFloat64
-	       err := pg.dbpool.QueryRow(pg.context, `SELECT AVG(price) FROM (SELECT (jdoc -> 'price')::numeric as price FROM product WHERE (jdoc -> 'price')::numeric < $1 LIMIT 100) as limited_products`, 30).Scan(&avg)
+	       err := pg.dbpool.QueryRow(pg.context, `SELECT AVG(price) FROM (SELECT (jdoc -> 'price')::numeric as price FROM product WHERE (jdoc -> 'price')::numeric < $1 LIMIT 200) as limited_products`, 30).Scan(&avg)
 	       if err != nil && err != sql.ErrNoRows {
 		       return err
 	       }
@@ -119,7 +119,7 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        case "mg":
 	       pipeline := []bson.M{
 		       {"$match": bson.M{"price": bson.M{"$lt": 30}}},
-		       {"$limit": 100},
+		       {"$limit": 200},
 		       {"$group": bson.M{"_id": nil, "avg_price": bson.M{"$avg": "$price"}}},
 	       }
 	       cursor, err := mg.db.Collection("product").Aggregate(mg.context, pipeline)

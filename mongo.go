@@ -33,7 +33,7 @@ func (mg *mongodb) mgConnect() {
 	}
 	// set write concern w=0 (fire-and-forget) on the client
 	// use convenience function Unacknowledged() (New and W are deprecated)
-	wc := writeconcern.Journaled()
+	wc := writeconcern.W1()
 	opts := options.Client().SetMaxPoolSize(mg.config.Mongo.MaxConnections).SetWriteConcern(wc)
 
 	client, err := mongo.Connect(context.Background(), opts.ApplyURI(uri))
