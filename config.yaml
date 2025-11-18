@@ -25,4 +25,4 @@ test:
   minClients: 1
   maxClients: 400
   stageIntervalS: 5
-  requestDelayMs: 250
+  requestDelayMs: 500

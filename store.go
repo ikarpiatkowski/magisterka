@@ -20,6 +20,7 @@ type product struct {
 	Price           float32  `bson:"price,omitempty" json:"price,omitempty"`
 	Stock           int      `bson:"stock,omitempty" json:"stock,omitempty"`
 	Colors          []string `bson:"colors,omitempty" json:"colors,omitempty"`
+	TextContent     string   `bson:"textContent,omitempty" json:"textContent,omitempty"`
 }
 
 func (p *product) create(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
@@ -172,6 +173,76 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *m
 	       return nil
        }
        return nil
+}
+
+// NOWA FUNKCJA FTS
+func (p *product) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
+	// Używamy nowej etykiety, aby rozróżnić operacje w Grafanie
+	defer observeLatency(m, "search_fts", time.Now())
+	
+	// Wszyscy będą szukać tego samego rzadkiego słowa kluczowego
+	keyword := "mongodb" 
+
+	switch db {
+	case "pg":
+		// Używamy COUNT(*), aby zasymulować agregację, tak jak w starym 'search'
+		// Wymaga indeksu: CREATE INDEX idx_product_fts ON product USING GIN (to_tsvector('simple', jdoc ->> 'textContent'));
+		var count sql.NullInt64
+		err := pg.dbpool.QueryRow(pg.context,
+			`SELECT COUNT(*) FROM product 
+			 WHERE to_tsvector('simple', jdoc ->> 'textContent') @@ to_tsquery('simple', $1)`,
+			keyword).Scan(&count)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		_ = count // Używamy zmiennej
+		return nil
+
+	case "mg":
+		// Używamy CountDocuments, aby benchmark był porównywalny
+		// Wymaga indeksu: db.product.createIndex({ textContent: "text" })
+		filter := bson.M{"$text": bson.M{"$search": keyword}}
+		count, err := mg.db.Collection("product").CountDocuments(mg.context, filter)
+		if err != nil {
+			return err
+		}
+		_ = count // Używamy zmiennej
+		return nil
+
+	case "es":
+		// Używamy _count API, które jest zoptymalizowane do tego zadania
+		// Wymaga domyślnego indeksu FTS, który Elastic tworzy automatycznie
+		var buf bytes.Buffer
+		query := map[string]interface{}{
+			"query": map[string]interface{}{
+				"match": map[string]interface{}{
+					"textContent": keyword,
+				},
+			},
+		}
+		if err := json.NewEncoder(&buf).Encode(query); err != nil {
+			return err
+		}
+
+		res, err := es.client.Count(
+			es.client.Count.WithContext(es.context),
+			es.client.Count.WithIndex(es.Cfg.IndexName),
+			es.client.Count.WithBody(&buf),
+		)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+
+		// Musimy odczytać ciało odpowiedzi, aby pomiar był kompletny
+		var r map[string]interface{}
+		if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+			return err
+		}
+		_ = r // Używamy zmiennej
+		return nil
+	}
+	return nil
 }
 
 func (p *product) delete(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {

@@ -43,6 +43,7 @@ func runTest(cfg *Config, dbType string, m *metrics) {
                            Price:       float32(random(1, 100)),
                            Stock:       100,
                            Colors:      []string{genString(5), genString(5)},
+                           TextContent: generateFTSContent(),
                        }
                        p2 := product{
                            Name:        genString(20),
@@ -50,6 +51,7 @@ func runTest(cfg *Config, dbType string, m *metrics) {
                            Price:       float32(random(1, 100)),
                            Stock:       100,
                            Colors:      []string{genString(5), genString(5)},
+                           TextContent: generateFTSContent(),
                        }
 
                        _ = p1.create(pg, mg, es, dbType, m)
@@ -58,7 +60,7 @@ func runTest(cfg *Config, dbType string, m *metrics) {
                        p1.Stock = random(1, 100)
                        _ = p1.update(pg, mg, es, dbType, m)
 
-                       _ = p1.search(pg, mg, es, dbType, m)
+                       _ = p1.searchFTS(pg, mg, es, dbType, m)
 
                        _ = p2.delete(pg, mg, es, dbType, m)
 
