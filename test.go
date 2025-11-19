@@ -37,11 +37,11 @@ func runTest(cfg *Config, dbType string, m *metrics) {
                            return
                        default:
                        }
-                       p1 := product{
+                       p1 := project{
                            Price:       float32(random(1, 100)),
                            TextContent: generateFTSContent(),
                        }
-                       p2 := product{
+                       p2 := project{
                            Price:       float32(random(1, 100)),
                            TextContent: generateFTSContent(),
                        }
