@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type product struct {
+type project struct {
 	PostgresId      int      `bson:"-" json:"-"`
 	MongoId         string   `bson:"-" json:"-"`
 	ElasticsearchId string   `bson:"-" json:"-"`
@@ -19,7 +19,7 @@ type product struct {
 	TextContent     string   `bson:"textContent,omitempty" json:"textContent,omitempty"`
 }
 
-func (p *product) create(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
+func (p *project) create(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
        defer observeLatency(m, "create", time.Now())
        switch db {
        case "pg":
@@ -27,9 +27,9 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elastic, db string, m *m
 	       if err != nil {
 		       return err
 	       }
-	       return pg.dbpool.QueryRow(pg.context, `INSERT INTO product(jdoc) VALUES ($1) RETURNING id`, b).Scan(&p.PostgresId)
+	       return pg.dbpool.QueryRow(pg.context, `INSERT INTO project(jdoc) VALUES ($1) RETURNING id`, b).Scan(&p.PostgresId)
        case "mg":
-	       res, err := mg.db.Collection("product").InsertOne(mg.context, p)
+	       res, err := mg.db.Collection("project").InsertOne(mg.context, p)
 	       if err == nil {
 		       if oid, ok := res.InsertedID.(primitive.ObjectID); ok {
 			       p.MongoId = oid.Hex()
@@ -66,11 +66,11 @@ func (p *product) create(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        return nil
 }
 
-func (p *product) update(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
+func (p *project) update(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
        defer observeLatency(m, "update", time.Now())
        switch db {
        case "pg":
-	       _, err := pg.dbpool.Exec(pg.context, `UPDATE product SET jdoc = jsonb_set(jdoc, '{price}', $1) WHERE id = $2`, p.Price, p.PostgresId)
+	       _, err := pg.dbpool.Exec(pg.context, `UPDATE project SET jdoc = jsonb_set(jdoc, '{price}', $1) WHERE id = $2`, p.Price, p.PostgresId)
 	       return err
        case "mg":
 	       id, err := primitive.ObjectIDFromHex(p.MongoId)
@@ -79,7 +79,7 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elastic, db string, m *m
 	       }
 	       filter := bson.M{"_id": id}
 	       update := bson.M{"$set": bson.M{"price": p.Price}}
-	       _, err = mg.db.Collection("product").UpdateOne(mg.context, filter, update)
+	       _, err = mg.db.Collection("project").UpdateOne(mg.context, filter, update)
 	       return err
        case "es":
 	       doc := map[string]interface{}{"doc": map[string]interface{}{"price": p.Price}}
@@ -102,12 +102,12 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        return nil
 }
 
-func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
+func (p *project) search(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
        defer observeLatency(m, "search", time.Now())
        switch db {
        case "pg":
 	       var avg sql.NullFloat64
-	       err := pg.dbpool.QueryRow(pg.context, `SELECT AVG(price) FROM (SELECT (jdoc -> 'price')::numeric as price FROM product WHERE (jdoc -> 'price')::numeric < $1 LIMIT 200) as limited_products`, 30).Scan(&avg)
+	       err := pg.dbpool.QueryRow(pg.context, `SELECT AVG(price) FROM (SELECT (jdoc -> 'price')::numeric as price FROM project WHERE (jdoc -> 'price')::numeric < $1 LIMIT 200) as limited_projects`, 30).Scan(&avg)
 	       if err != nil && err != sql.ErrNoRows {
 		       return err
 	       }
@@ -119,7 +119,7 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *m
 		       {"$limit": 200},
 		       {"$group": bson.M{"_id": nil, "avg_price": bson.M{"$avg": "$price"}}},
 	       }
-	       cursor, err := mg.db.Collection("product").Aggregate(mg.context, pipeline)
+	       cursor, err := mg.db.Collection("project").Aggregate(mg.context, pipeline)
 	       if err != nil {
 		       return err
 	       }
@@ -171,7 +171,7 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        return nil
 }
 
-func (p *product) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
+func (p *project) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
 	defer observeLatency(m, "search_fts", time.Now())
 	
 	keyword := "mongodb" 
@@ -180,7 +180,7 @@ func (p *product) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m
 	case "pg":
 		var count sql.NullInt64
 		err := pg.dbpool.QueryRow(pg.context,
-			`SELECT COUNT(*) FROM product 
+			`SELECT COUNT(*) FROM project 
 			 WHERE to_tsvector('simple', jdoc ->> 'textContent') @@ to_tsquery('simple', $1)`,
 			keyword).Scan(&count)
 		if err != nil && err != sql.ErrNoRows {
@@ -191,7 +191,7 @@ func (p *product) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m
 
 	case "mg":
 		filter := bson.M{"$text": bson.M{"$search": keyword}}
-		count, err := mg.db.Collection("product").CountDocuments(mg.context, filter)
+		count, err := mg.db.Collection("project").CountDocuments(mg.context, filter)
 		if err != nil {
 			return err
 		}
@@ -231,11 +231,11 @@ func (p *product) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m
 	return nil
 }
 
-func (p *product) delete(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
+func (p *project) delete(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
        defer observeLatency(m, "delete", time.Now())
        switch db {
        case "pg":
-	       _, err := pg.dbpool.Exec(pg.context, `DELETE FROM product WHERE id = $1`, p.PostgresId)
+	       _, err := pg.dbpool.Exec(pg.context, `DELETE FROM project WHERE id = $1`, p.PostgresId)
 	       return err
        case "mg":
 	       id, err := primitive.ObjectIDFromHex(p.MongoId)
@@ -243,7 +243,7 @@ func (p *product) delete(pg *postgres, mg *mongodb, es *elastic, db string, m *m
 		       return err
 	       }
 	       filter := bson.M{"_id": id}
-	       _, err = mg.db.Collection("product").DeleteOne(mg.context, filter)
+	       _, err = mg.db.Collection("project").DeleteOne(mg.context, filter)
 	       return err
        case "es":
 	       _, err := es.EnqueueBulk("delete", es.Cfg.IndexName, p.ElasticsearchId, nil)
