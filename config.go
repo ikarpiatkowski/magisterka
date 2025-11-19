@@ -49,8 +49,6 @@ type TestConfig struct {
 
 func (c *Config) loadConfig(path string) {
 	f, err := os.ReadFile(path)
-	fail(err, "os.ReadFile failed")
-
-	err = yaml.Unmarshal(f, c)
+	yaml.Unmarshal(f, c)
 	fail(err, "yaml.Unmarshal failed")
 }

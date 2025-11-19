@@ -15,11 +15,7 @@ type product struct {
 	MongoId         string   `bson:"-" json:"-"`
 	ElasticsearchId string   `bson:"-" json:"-"`
 	Id              any      `bson:"_id,omitempty" json:"id,omitempty"`
-	Name            string   `bson:"name,omitempty" json:"name,omitempty"`
-	Description     string   `bson:"description,omitempty" json:"description,omitempty"`
 	Price           float32  `bson:"price,omitempty" json:"price,omitempty"`
-	Stock           int      `bson:"stock,omitempty" json:"stock,omitempty"`
-	Colors          []string `bson:"colors,omitempty" json:"colors,omitempty"`
 	TextContent     string   `bson:"textContent,omitempty" json:"textContent,omitempty"`
 }
 
@@ -74,7 +70,7 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        defer observeLatency(m, "update", time.Now())
        switch db {
        case "pg":
-	       _, err := pg.dbpool.Exec(pg.context, `UPDATE product SET jdoc = jsonb_set(jdoc, '{stock}', $1) WHERE id = $2`, p.Stock, p.PostgresId)
+	       _, err := pg.dbpool.Exec(pg.context, `UPDATE product SET jdoc = jsonb_set(jdoc, '{price}', $1) WHERE id = $2`, p.Price, p.PostgresId)
 	       return err
        case "mg":
 	       id, err := primitive.ObjectIDFromHex(p.MongoId)
@@ -82,11 +78,11 @@ func (p *product) update(pg *postgres, mg *mongodb, es *elastic, db string, m *m
 		       return err
 	       }
 	       filter := bson.M{"_id": id}
-	       update := bson.M{"$set": bson.M{"stock": p.Stock}}
+	       update := bson.M{"$set": bson.M{"price": p.Price}}
 	       _, err = mg.db.Collection("product").UpdateOne(mg.context, filter, update)
 	       return err
        case "es":
-	       doc := map[string]interface{}{"doc": map[string]interface{}{"stock": p.Stock}}
+	       doc := map[string]interface{}{"doc": map[string]interface{}{"price": p.Price}}
 	       var buf bytes.Buffer
 	       if err := json.NewEncoder(&buf).Encode(doc); err != nil {
 		       return err
@@ -175,18 +171,13 @@ func (p *product) search(pg *postgres, mg *mongodb, es *elastic, db string, m *m
        return nil
 }
 
-// NOWA FUNKCJA FTS
 func (p *product) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m *metrics) error {
-	// Używamy nowej etykiety, aby rozróżnić operacje w Grafanie
 	defer observeLatency(m, "search_fts", time.Now())
 	
-	// Wszyscy będą szukać tego samego rzadkiego słowa kluczowego
 	keyword := "mongodb" 
 
 	switch db {
 	case "pg":
-		// Używamy COUNT(*), aby zasymulować agregację, tak jak w starym 'search'
-		// Wymaga indeksu: CREATE INDEX idx_product_fts ON product USING GIN (to_tsvector('simple', jdoc ->> 'textContent'));
 		var count sql.NullInt64
 		err := pg.dbpool.QueryRow(pg.context,
 			`SELECT COUNT(*) FROM product 
@@ -195,23 +186,19 @@ func (p *product) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
-		_ = count // Używamy zmiennej
+		_ = count
 		return nil
 
 	case "mg":
-		// Używamy CountDocuments, aby benchmark był porównywalny
-		// Wymaga indeksu: db.product.createIndex({ textContent: "text" })
 		filter := bson.M{"$text": bson.M{"$search": keyword}}
 		count, err := mg.db.Collection("product").CountDocuments(mg.context, filter)
 		if err != nil {
 			return err
 		}
-		_ = count // Używamy zmiennej
+		_ = count
 		return nil
 
 	case "es":
-		// Używamy _count API, które jest zoptymalizowane do tego zadania
-		// Wymaga domyślnego indeksu FTS, który Elastic tworzy automatycznie
 		var buf bytes.Buffer
 		query := map[string]interface{}{
 			"query": map[string]interface{}{
@@ -234,12 +221,11 @@ func (p *product) searchFTS(pg *postgres, mg *mongodb, es *elastic, db string, m
 		}
 		defer res.Body.Close()
 
-		// Musimy odczytać ciało odpowiedzi, aby pomiar był kompletny
 		var r map[string]interface{}
 		if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
 			return err
 		}
-		_ = r // Używamy zmiennej
+		_ = r
 		return nil
 	}
 	return nil

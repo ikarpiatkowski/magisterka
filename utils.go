@@ -19,18 +19,6 @@ func fail(err error, format string, args ...any) {
 	}
 }
 
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func genString(n int) string {
-	b := make([]rune, n)
-
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-
-	return string(b)
-}
-
 var keywordVocabulary = []string{
 	"mongodb", "postgresql", "elasticsearch", "analiza", "raport", "benchmark",
 	"indeks", "transakcja", "replikacja", "skalowalność", "wydajność", "jsonb",
@@ -57,36 +45,24 @@ var loremIpsumWords = []string{
 }
 
 func generateFTSContent() string {
-    //
-    // MOŻESZ TERAZ BEZPIECZNIE ZMIENIĆ TĘ WARTOŚĆ NA 100, 1000, 10000 itd.
-    //
-    const textLength = 10000 // Długość tekstu bazowego (w słowach)
-    const keywordCount = 3   // Ile rzadkich słów wstrzykniemy
+    const textLength = 10000
+    const keywordCount = 3
 
     loremLength := len(loremIpsumWords)
     keywordLength := len(keywordVocabulary)
 
-    // Tworzymy bufor na nasz nowy, długi tekst
     textContent := make([]string, textLength)
 
-    // Wybieramy losowy punkt startowy w naszym słowniku Lorem Ipsum
-    // Daje nam to "przesuwane okno", o którym myślałeś.
     start := random(0, loremLength)
 
-    // Wypełniamy bufor 'textLength' słowami, zapętlając słownik Lorem Ipsum
     for i := 0; i < textLength; i++ {
-        // Operator modulo (%) sprawia, że gdy dojdziemy do końca
-        // słownika, zaczynamy znowu od początku.
-        // To pozwala nam generować tekst o dowolnej długości.
         textContent[i] = loremIpsumWords[(start+i)%loremLength]
     }
 
-    // Wstrzyknij 'keywordCount' rzadkich słów w losowe miejsca
-    // Ta logika pozostaje bez zmian.
     for i := 0; i < keywordCount; i++ {
         keyword := keywordVocabulary[random(0, keywordLength)]
         position := random(0, textLength)
-        textContent[position] = keyword // Nadpisz słowo
+        textContent[position] = keyword
     }
 
     return strings.Join(textContent, " ")

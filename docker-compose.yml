@@ -21,7 +21,7 @@ services:
       - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_ROOT_PASSWORD: ikarikar
     volumes:
       - mongodb_data:/data/db
     networks:
@@ -34,11 +34,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: testdb
+      POSTGRES_DB: projects
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password123
-    # For Postgres 18+ the recommended single mount point is /var/lib/postgresql
-    # so the image can put versioned data under a subdirectory and support pg_upgrade
+      POSTGRES_PASSWORD: ikarikar
     volumes:
       - postgresql_data:/var/lib/postgresql
     command:
@@ -86,7 +84,6 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms2g -Xmx2g
     volumes:
       - es_data:/usr/share/elasticsearch/data
     networks:
@@ -128,7 +125,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_SECURITY_ADMIN_PASSWORD: ikarikar
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:

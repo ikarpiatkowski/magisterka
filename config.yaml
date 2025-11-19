@@ -1,28 +1,26 @@
-debug: true
-
 postgres:
   user: admin
-  password: password123
+  password: ikarikar
   host: postgresql
-  database: testdb
+  database: projects
   maxConnections: 20
   metricsPort: 8082
 
 mongo:
   user: admin
-  password: password123
+  password: ikarikar
   host: mongodb
-  database: testdb
+  database: projects
   maxConnections: 20
   metricsPort: 8081
 
 elasticsearch:
   host: "elasticsearch:9200"
   metricsPort: 8083
-  indexName: "productss"
+  indexName: "projects"
 
 test:
   minClients: 1
-  maxClients: 400
+  maxClients: 240
   stageIntervalS: 5
-  requestDelayMs: 500
+  requestDelayMs: 250

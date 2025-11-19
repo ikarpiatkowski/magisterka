@@ -43,5 +43,4 @@ func main() {
 	}()
 
 	wg.Wait()
-	slog.Info("All tests finished.")
 }

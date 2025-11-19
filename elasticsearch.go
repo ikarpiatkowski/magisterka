@@ -157,7 +157,6 @@ func (es *elastic) flushBulk(items []*bulkItem) {
 
 	ctx, cancel := context.WithTimeout(es.context, 15*time.Second)
 	defer cancel()
-	// time the network call (true ES flush time)
 	flushStart := time.Now()
        res, err := es.client.Bulk(bytes.NewReader(buf.Bytes()), es.client.Bulk.WithContext(ctx))
        if err != nil {
